@@ -23,6 +23,16 @@ const browser = await chromium.launch({ executablePath: CHROME, headless: true }
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = [];
 let failures = 0;
+// Record what is sent to the speech engine (headless Chrome has no audio to check).
+await page.addInitScript(() => {
+  window.__spoken = [];
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.speak = (u) => {
+    window.__spoken.push(u.text);
+    setTimeout(() => u.onend && u.onend(new Event('end')), 50);
+  };
+});
+const spoken = () => page.evaluate(() => window.__spoken.slice());
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => m.type() === 'error' && !m.text().includes('401') && errors.push(`console: ${m.text()}`));
 
@@ -38,10 +48,13 @@ async function check(name, fn) {
 }
 
 /** Open the app with `source` as main.py (via a share link, so Monaco auto-indent can't interfere). */
-async function load(source) {
+async function load(source, mode = 'game') {
   const enc = Buffer.from(source, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   await page.goto(`${BASE}/`);
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate((m) => {
+    localStorage.clear();
+    localStorage.setItem('codelens.view-mode', m);
+  }, mode);
   await page.goto(`${BASE}/#code=${enc}`);
   await page.reload();
   await page.waitForSelector('.monaco-editor', { timeout: 30000 });
@@ -75,9 +88,99 @@ print("start")
 print(average(scores))
 `;
 
+// ---------------------------------------------------------------- kids view (default for new visitors)
+const says = () => page.locator('#robot-says + p').innerText();
+await page.goto(`${BASE}/`);
+await page.evaluate(() => localStorage.clear());
+await page.reload();
+await check('kids view is the default', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Kids' }).waitFor({ timeout: 30000 }));
+await check('kids: plain-word steps, idea cards, boxes', async () => {
+  await page.getByLabel('Pick a program').selectOption('pets');
+  await page.getByRole('checkbox', { name: /Read aloud/ }).uncheck().catch(() => {});
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/Step 1 of \d+/).waitFor({ timeout: 30000 });
+  await page.getByRole('button', { name: /Next step/ }).click();
+  if (!(await says()).includes('Make a train called pets with 3 cars: “cat”, “dog” and “fish”')) throw new Error(await says());
+  await page.getByText('💡 New idea: A train of things').waitFor();
+  await page.locator('text=car 0').first().waitFor(); // the board shows the result of the step
+});
+await check('kids: plan of the program before starting', async () => {
+  await page.getByLabel('Pick a program').selectOption('weather');
+  await page.getByText('📖 What does this program do?').waitFor();
+  await page.getByText('This program has 2 main steps').waitFor({ timeout: 10000 });
+  await page.getByText(/Ask a question: is the temperature box bigger than 30\?|Ask a question: is the temperature box bigger than 25\?/).first().waitFor();
+  await page.getByText('Otherwise (if the answer was no), do the lines below it.').first().waitFor();
+});
+await check('kids: hover a line or word to see what it means', async () => {
+  // Monaco only shows hovers over the text itself, so point near the start of the line.
+  const box = await page.locator('.monaco-editor .view-line', { hasText: 'temperature = 30' }).first().boundingBox();
+  await page.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 5 });
+  await page.locator('.monaco-hover', { hasText: 'Line 1' }).first().waitFor({ timeout: 8000 });
+  await page.mouse.move(5, 5);
+  await page.locator('.monaco-editor .view-line span', { hasText: /^if$/ }).first().hover();
+  await page.locator('.monaco-hover', { hasText: 'asks a yes/no question' }).first().waitFor({ timeout: 8000 });
+  await page.mouse.move(5, 5);
+});
+await check('kids: explain every line before running', async () => {
+  await page.getByRole('button', { name: /Explain every line/ }).click();
+  await page.locator('.cl-line-note', { hasText: 'Put 30 into the temperature box.' }).first().waitFor();
+  await page.getByRole('button', { name: /Hide line notes/ }).click();
+});
+await page.screenshot({ path: `${OUT}/0-kids-plan.png` });
+await check('kids: reads aloud using the name Robo', async () => {
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/Step 1 of \d+/).waitFor({ timeout: 30000 });
+  await page.getByRole('button', { name: /Next step/ }).click();
+  await page.getByRole('checkbox', { name: /Read aloud/ }).check();
+  await page.getByRole('button', { name: /From the start/ }).click();
+  const said = await spoken();
+  if (!said.some((t) => t.startsWith("Hi, I'm Robo!"))) throw new Error(JSON.stringify(said.slice(-3)));
+  if (said.some((t) => /the robot/i.test(t))) throw new Error('still says "the robot"');
+  await page.getByRole('checkbox', { name: /Read aloud/ }).uncheck();
+});
+await check('kids: gentle oops', async () => {
+  await page.getByLabel('Pick a program').selectOption('bug');
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/sharing cookies among 0 friends/).waitFor({ timeout: 30000 });
+});
+await check('kids: help me fix a typing slip', async () => {
+  await load('for i in range(3)\n    print(i)\n', 'kids');
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByRole('button', { name: /Help me fix it/ }).click({ timeout: 30000 });
+  await page.getByText(/needs a ':' at the end/).waitFor({ timeout: 15000 });
+  await page.getByRole('button', { name: /Use this fix/ }).click();
+  await page.getByText(/Step 1 of \d+/).waitFor({ timeout: 30000 });
+  const first = (await page.locator('.monaco-editor .view-line').first().innerText()).replace(/ /g, ' ').trim(); // Monaco renders spaces as nbsp
+  if (first !== 'for i in range(3):') throw new Error(`fix not applied: ${first}`);
+});
+await check('kids: complete a challenge and earn a star', async () => {
+  await page.getByRole('button', { name: /Challenges/ }).click();
+  await page.getByRole('button', { name: /Say hello/ }).click();
+  await page.getByText('🎯 Mission: 👋 Say hello').waitFor();
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/Not yet:/).waitFor({ timeout: 30000 });
+  await page.locator('.monaco-editor .view-lines').first().click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.insertText('print("Hello, world!")');
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText('⭐ Mission complete! Great coding!').waitFor({ timeout: 30000 });
+  await page.getByRole('button', { name: /Challenges.*1\/8/ }).waitFor();
+});
+await check('kids: build a program with blocks', async () => {
+  await page.getByRole('button', { name: /stop mission/ }).click();
+  await page.getByRole('button', { name: /Use blocks/ }).click();
+  await page.locator('.blocklySvg').first().waitFor({ timeout: 20000 });
+  await page.locator('.monaco-editor .view-line', { hasText: 'for count in range(3):' }).first().waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/Step 1 of \d+/).waitFor({ timeout: 30000 });
+  await page.screenshot({ path: `${OUT}/0-kids-blocks.png` });
+  await page.getByRole('button', { name: /Type code/ }).click();
+});
+await page.screenshot({ path: `${OUT}/0-kids.png` });
+
 // ---------------------------------------------------------------- game view
 await load(PROGRAM);
-await check('game view is the default', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Game' }).waitFor());
+await check('game view', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Game' }).waitFor());
 await check('run lands on the crash', async () => {
   await run();
   await status('IndexError');
@@ -94,10 +197,26 @@ await check('screen-reader description of the board', async () => {
 });
 await check('one-line explanation beside the active line', async () => {
   await page.locator('.cl-inline-note').first().waitFor();
-  const note = await page.getByText(/^🗣 /).first().innerText();
+  const note = await page.locator('p', { hasText: /^🗣 / }).first().innerText();
   if (!note.includes('Crash!')) throw new Error(note);
 });
 await page.screenshot({ path: `${OUT}/1-crash.png` });
+await check('game: read aloud speaks each step', async () => {
+  await page.getByRole('button', { name: /Read aloud/ }).click();
+  const before = (await spoken()).length;
+  await page.keyboard.press('Alt+Home');
+  await page.keyboard.press('F10');
+  await page.waitForTimeout(300);
+  const said = (await spoken()).slice(before);
+  if (!said.length || !said.some((t) => t.length > 5)) throw new Error(JSON.stringify(said));
+  await page.getByRole('button', { name: /Reading aloud/ }).click();
+  await page.keyboard.press('Alt+E');
+});
+await check('game: program plan panel', async () => {
+  await page.getByRole('button', { name: /What does this program do/ }).click();
+  await page.getByText(/This program has \d+ main steps and teaches 1 trick \(average\)/).waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: /What does this program do/ }).click();
+});
 await check('explain every line', async () => {
   await page.getByRole('button', { name: /Explain every line/ }).click();
   await page.locator('.cl-line-note').first().waitFor();
