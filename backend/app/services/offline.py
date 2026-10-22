@@ -151,7 +151,7 @@ def propose_fix(source: str, evidence: dict[str, Any]) -> Optional[tuple[str, st
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return None
+        return fix_syntax(source)
     line = error["line"]
     focus = evidence["focus_event"] or {}
     fixer = {
@@ -398,3 +398,96 @@ def _fix_unbound_local(source, tree, line, error, focus):
         f"and line {line} read it before it had a value. The patch adds `global {name}` so the function updates the "
         "module-level variable. (Passing the value in and returning the new one is often a cleaner design.)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Typing slips (SyntaxError / IndentationError): the commonest beginner blockers
+# ---------------------------------------------------------------------------
+
+_BLOCK_WORDS = ("if ", "elif ", "else", "for ", "while ", "def ", "class ", "try", "except", "finally", "with ")
+
+
+def _indent_of(text: str) -> str:
+    return text[: len(text) - len(text.lstrip(" \t"))]
+
+
+def _syntax_candidates(lines: list[str], ln: int, err: SyntaxError) -> list[tuple[list[str], str]]:
+    """Possible one-step repairs around line `ln` (1-based), each with a plain explanation."""
+    out: list[tuple[list[str], str]] = []
+    msg = (err.msg or "").lower()
+
+    def replaced(i: int, text: str) -> list[str]:
+        copy = list(lines)
+        copy[i] = text
+        return copy
+
+    for i in (ln - 1, ln - 2):
+        if not 0 <= i < len(lines):
+            continue
+        body = lines[i].rstrip("\r\n")
+        stripped = body.strip()
+        newline = lines[i][len(body):] or "\n"
+        if stripped.startswith(_BLOCK_WORDS) and not stripped.endswith(":"):
+            out.append((replaced(i, body.rstrip() + ":" + newline), f"Line {i + 1} starts a block, so it needs a ':' at the end."))
+        if stripped.startswith(("if ", "elif ", "while ")) and re.search(r"[^=!<>]=[^=]", stripped):
+            fixed = re.sub(r"(?<=[^=!<>])=(?=[^=])", "==", body, count=1)
+            out.append((replaced(i, fixed + newline), f"Line {i + 1} asks a question, so it needs '==' (is equal to) instead of '=' (put into a box)."))
+        for quote in ('"', "'"):
+            if body.count(quote) % 2 == 1:
+                insert_at = len(body.rstrip(") \t")) if body.rstrip().endswith(")") else len(body.rstrip())
+                fixed = body[:insert_at] + quote + body[insert_at:]
+                out.append((replaced(i, fixed + newline), f"Line {i + 1} opens some words with {quote} but never closes them."))
+        for open_, close in (("(", ")"), ("[", "]"), ("{", "}")):
+            missing = body.count(open_) - body.count(close)
+            if missing > 0:
+                out.append((replaced(i, body.rstrip() + close * missing + newline),
+                            f"Line {i + 1} opens a bracket {open_} that is never closed."))
+        if "\t" in _indent_of(body):
+            out.append((replaced(i, _indent_of(body).replace("\t", "    ") + body.lstrip(" \t") + newline),
+                        f"Line {i + 1} mixes tabs and spaces at the start; it now uses spaces only."))
+
+    i = ln - 1
+    if 0 <= i < len(lines):
+        body = lines[i].rstrip("\r\n")
+        newline = lines[i][len(body):] or "\n"
+        prev = next((lines[j].rstrip("\r\n") for j in range(i - 1, -1, -1) if lines[j].strip()), "")
+        if "unexpected indent" in msg or "unindent" in msg:
+            out.append((replaced(i, _indent_of(prev) + body.lstrip(" \t") + newline),
+                        f"Line {i + 1} is pushed in too far; it now lines up with the line above."))
+        if "expected an indented block" in msg:
+            out.append((replaced(i, _indent_of(prev) + "    " + body.lstrip(" \t") + newline),
+                        f"Line {i + 1} belongs inside the block above, so it is now pushed in by 4 spaces."))
+    return out
+
+
+def fix_syntax(source: str, max_steps: int = 3) -> Optional[tuple[str, str]]:
+    """Repair up to `max_steps` typing slips. Returns (fixed_source, explanation) only if the result parses."""
+    current, reasons = source, []
+    for _ in range(max_steps):
+        try:
+            ast.parse(current)
+            break
+        except SyntaxError as err:
+            lines = current.splitlines(True)
+            ln = err.lineno or 1
+            best = None
+            for candidate, why in _syntax_candidates(lines, ln, err):
+                text = "".join(candidate)
+                try:
+                    ast.parse(text)
+                    best = (text, why)
+                    break
+                except SyntaxError as later:
+                    if (later.lineno or 0) > ln and best is None:
+                        best = (text, why)  # progress: the problem moved further down
+            if best is None:
+                return None
+            current, why = best
+            reasons.append(why)
+    try:
+        ast.parse(current)
+    except SyntaxError:
+        return None
+    if current == source:
+        return None
+    return current, " ".join(reasons) + " Now Python can read the program."

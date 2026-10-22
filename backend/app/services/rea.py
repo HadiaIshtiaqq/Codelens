@@ -367,7 +367,10 @@ def _DevNull():
 class ReaService:
     def __init__(self, settings: Settings):
         self.settings = settings
-        settings.rea_workspace_root.mkdir(parents=True, exist_ok=True)
+        try:
+            settings.rea_workspace_root.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:  # REA is optional: never stop the app from starting
+            log.warning("REA workspace %s unavailable: %s", settings.rea_workspace_root, exc)
         self.mcp = ReaMcpBridge(settings)
         self._doctor: Optional[tuple[float, dict[str, Any]]] = None
 

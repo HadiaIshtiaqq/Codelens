@@ -278,8 +278,13 @@ def _extract_json(content: str) -> dict[str, Any]:
     return data
 
 
-def grounding_warnings(out: ExplanationOut, line_count: int, known_names: set[str]) -> list[str]:
-    """Cheap checks that the model stayed within the evidence."""
+def grounding_warnings(out: ExplanationOut, line_count: int, known: "dict[str, set[str]] | set[str]") -> list[str]:
+    """Checks that the model stayed within the evidence: real lines, real variables, recorded values.
+
+    `known` maps each variable name to every value it was recorded with during the run.
+    """
+    if isinstance(known, set):
+        known = {name: set() for name in known}
     warnings = []
     bad = [n for n in out.cited_lines if not 1 <= n <= line_count]
     if bad:
@@ -288,7 +293,17 @@ def grounding_warnings(out: ExplanationOut, line_count: int, known_names: set[st
     for m in re.finditer(r"\bline (\d+)", text):
         if not 1 <= int(m.group(1)) <= line_count:
             warnings.append(f"mentions line {m.group(1)}, which does not exist")
-    for m in re.finditer(r"'(\w+)' (?:was|is|equals|had the value) ", text):
-        if m.group(1) not in known_names:
-            warnings.append(f"states a value for '{m.group(1)}', which never appears in the trace")
+    for m in re.finditer(r"'(\w+)' (?:was|is|equals|had the value) ('[^']*'|\"[^\"]*\"|[^\s,;]+)", text):
+        name, claimed = m.group(1), m.group(2).rstrip(".")
+        if name not in known:
+            warnings.append(f"states a value for '{name}', which never appears in the trace")
+        elif known[name] and _normalise(claimed) not in {_normalise(v) for v in known[name]}:
+            recorded = ", ".join(sorted(known[name])[:5])
+            warnings.append(f"says '{name}' was {claimed}, but the trace only recorded {recorded}")
     return warnings
+
+
+def _normalise(value: str) -> str:
+    """Compare values loosely: quotes and a trailing '.0' don't matter."""
+    v = value.strip().strip("'\"")
+    return v[:-2] if v.endswith(".0") else v

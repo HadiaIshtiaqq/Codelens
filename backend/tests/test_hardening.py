@@ -52,3 +52,16 @@ def test_dev_sandbox_caps_memory():
     result = runner.run("mem", "blob = 'a' * (10 ** 9)\nprint(len(blob))\n", timeout=5, max_events=5)
     assert "1000000000" not in result.stdout
     assert result.error and result.error["type"] in ("MemoryError", "SandboxError"), result.error
+
+
+def test_multiple_access_codes(client, monkeypatch):
+    import app.main as main
+    from app.services.access import parse_codes
+
+    assert parse_codes("judges:abc, team:xyz") == {"judges": "abc", "team": "xyz"}
+    assert parse_codes("solo") == {"default": "solo"}
+    locked = dataclasses.replace(get_settings(), access_code="judges:abc, team:xyz")
+    monkeypatch.setattr(main, "get_settings", lambda: locked)
+    body = {"source_code": "x = 1\n"}
+    for code, status in (("abc", 200), ("xyz", 200), ("judges:abc", 401), ("nope", 401)):
+        assert client.post("/api/v1/executions", json=body, headers={"X-CodeLens-Access": code}).status_code == status

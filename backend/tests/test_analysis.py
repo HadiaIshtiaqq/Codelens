@@ -195,6 +195,14 @@ def test_llm_explanation_used_and_grounding_checked(client, llm_app):
     assert "99" in warnings and "'zzz'" in warnings
 
 
+def test_grounding_checks_claimed_values():
+    from app.services.llm import ExplanationOut, grounding_warnings
+
+    out = ExplanationOut(summary="'b' was 5 and 'a' was 10.", likely_cause="'a' was 10.0", cited_lines=[2])
+    warnings = grounding_warnings(out, 3, {"a": {"10"}, "b": {"0"}})
+    assert warnings == ["says 'b' was 5, but the trace only recorded 0"]
+
+
 def test_llm_failure_degrades_to_offline(client, llm_app):
     _mock_llm(llm_app, lambda request: httpx.Response(503, text="overloaded"))
     exec_id = _execute(client, DIVIDE)
@@ -244,3 +252,35 @@ def test_strict_provider_refuses_fallback(client, llm_app, monkeypatch):
     exec_id = _execute(client, DIVIDE)
     resp = client.post("/api/v1/explanations", json={"execution_id": exec_id})
     assert resp.status_code == 502 and "AI provider failed" in resp.json()["detail"]
+
+
+import pytest as _pytest
+
+from app.services.offline import fix_syntax
+
+
+@_pytest.mark.parametrize(
+    "broken, fixed_piece, why",
+    [
+        ("for i in range(3)\n    print(i)\n", "for i in range(3):\n", "needs a ':'"),
+        ("x = 5\nif x = 5:\n    print('five')\n", "if x == 5:", "'=='"),
+        ('print("hello)\n', 'print("hello")\n', "never closes them"),
+        ("print('hi'\n", "print('hi')\n", "never closed"),
+        ("x = 1\n    y = 2\n", "\ny = 2\n", "pushed in too far"),
+        ("if True:\nprint('yes')\n", "    print('yes')", "pushed in by 4 spaces"),
+    ],
+)
+def test_fix_syntax_typing_slips(broken, fixed_piece, why):
+    result = fix_syntax(broken)
+    assert result is not None, broken
+    fixed, explanation = result
+    assert fixed_piece in fixed and why in explanation
+    import ast as _ast
+    _ast.parse(fixed)
+
+
+def test_syntax_fix_through_patch_api(client):
+    exec_id = _execute(client, "for i in range(3)\n    print(i)\n")
+    patch = client.post("/api/v1/patches", json={"execution_id": exec_id}).json()
+    assert patch["patched_source"].startswith("for i in range(3):\n")
+    assert "needs a ':'" in patch["rationale"]

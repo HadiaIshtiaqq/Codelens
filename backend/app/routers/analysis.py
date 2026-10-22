@@ -43,11 +43,13 @@ def _client(request: Request) -> Optional[LLMClient]:
     return LLMClient(provider, get_settings().llm_timeout_seconds, getattr(request.app.state, "llm_transport", None))
 
 
-def _known_names(record: ExecutionRecord) -> set[str]:
-    names: set[str] = set()
+def _known_values(record: ExecutionRecord) -> dict[str, set[str]]:
+    """Every value each variable was recorded with during the run (for the grounding check)."""
+    values: dict[str, set[str]] = {}
     for ev in record.result.events:
-        names.update(ev.get("locals", {}))
-    return names
+        for name, value in ev.get("locals", {}).items():
+            values.setdefault(name, set()).add(value)
+    return values
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +93,7 @@ async def create_explanation(req: ExplanationRequest, request: Request) -> Expla
     if client is not None:
         try:
             out = await client.explain(evidence, facts, req.question)
-            warnings = grounding_warnings(out, evidence["program"]["line_count"], _known_names(record))
+            warnings = grounding_warnings(out, evidence["program"]["line_count"], _known_values(record))
             body = out.model_dump()
         except LLMError as exc:
             if get_settings().require_llm_provider:
