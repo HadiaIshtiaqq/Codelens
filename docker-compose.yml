@@ -5,8 +5,8 @@
 #   CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d   # + automatic HTTPS
 #   docker compose --profile mcp up -d        # + MCP endpoint for Alexa+/agents on :8765/mcp
 #
-# Security note: the app container gets the host's Docker socket so it can start one
-# sandbox container per run. That makes the app container as powerful as Docker itself,
+# Security note: the app container (non-root, uid 10002) gets the host's Docker socket so it can
+# start one sandbox container per run. That makes the app container as powerful as Docker itself,
 # so only run this image (not user code) with it; user code always runs in the
 # separate, network-less, read-only codelens-worker containers.
 
@@ -31,6 +31,10 @@ services:
     environment:
       CODELENS_SANDBOX: docker
       CODELENS_CORS_ORIGINS: ${CODELENS_CORS_ORIGINS:-http://localhost:8000}
+    # The app runs as a non-root user; this group lets it use the host's Docker socket.
+    # Linux: DOCKER_GID=$(getent group docker | cut -d: -f3) docker compose up -d   (Docker Desktop: 0)
+    group_add:
+      - "${DOCKER_GID:-0}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - codelens-data:/app/backend/data

@@ -26,6 +26,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=ui /src/frontend/dist /app/frontend/dist
 
+# Run as an unprivileged user. Docker-socket access comes from group_add in docker-compose.yml
+# (DOCKER_GID = the host group that owns /var/run/docker.sock).
+RUN useradd --uid 10002 --no-create-home --shell /usr/sbin/nologin codelens     && mkdir -p /app/backend/data /app/rea-workspace && chown -R codelens /app/backend/data /app/rea-workspace
+USER 10002
+
 ENV CODELENS_SANDBOX=docker \
     CODELENS_DB_PATH=/app/backend/data/codelens.db \
     PYTHONUNBUFFERED=1

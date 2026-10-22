@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "codelens": {
-      "command": "backend/.venv/Scripts/python.exe",
-      "args": ["backend/app/mcp_server.py"],
+      "command": "node",
+      "args": ["scripts/mcp.mjs"],
       "env": { "CODELENS_API_URL": "http://127.0.0.1:8000" }
     }
   }

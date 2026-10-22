@@ -3,6 +3,16 @@
 A Python debugging and reverse-engineering workspace:
 
 - **Trace** Python in a sandbox with `sys.settrace`: every call, line, return, exception and print, with variable snapshots.
+- **🧸 Kids mode (the default)**, built for an 8-year-old with no coding experience:
+  - Every step is one plain sentence about what just happened: "📦 Make a new box called apples: 3", "🔁 Loop: take the next one from the pets box. pet is “dog”", "❓ Question: is the temperature box bigger than 25? Yes!".
+  - Values are shown as labeled cardboard boxes, and lists as trains with numbered cars.
+  - A **💡 New idea** card appears the first time each concept shows up (box, list, loop, if, trick…).
+  - Errors get gentle **"Oops!"** messages that say how to fix them.
+  - Sentences can be read aloud (with a voice picker), there's a slow autoplay, big buttons, and 10 starter programs from "Hello, robot!" to "Find the bug!".
+  - **🧩 Blocks:** build programs by snapping blocks together (Blockly) instead of typing. The blocks become real Python, which Robo runs and explains.
+  - **🏆 Challenges:** 8 missions, from "Say hello" to "Teach a trick". Each is checked automatically when you press Start, with kind hints and ⭐ stars.
+  - **🔧 Help me fix it** repairs typing slips (a missing `:`, quote or bracket, wrong indentation, `=` instead of `==`) and common runtime bugs, then explains what changed.
+  - **Idea cards are remembered** once a child taps "Got it!". A **progress code** carries stars, learned ideas and XP to another computer.
 - **Play it like a game.** A 🤖 robot walks through your code. Each function call is a room, and lists, dicts and objects are boxes linked by arrows, so aliasing is visible. Crashes explode 💥, clean runs end in 🏁 confetti, and there's autoplay with speed control. **Predict mode** awards XP for guessing which line runs next, with streaks, levels and achievements. A Classic view (editor, variables table, call stack, timeline) is one click away.
 - **A one-line explanation for every step**, shown right beside the active line, for example `total += xs[i]  ◀ Adds xs[i] to total → total = 175`. It's built from the code's syntax tree plus real values from the trace, never guessed. **📖 Explain every line** annotates the whole program.
 - **Real programs:**
@@ -33,6 +43,7 @@ Prerequisites: Python 3.11+, Node.js 22.19+ / 24.11+, and Docker Desktop (option
 
 ```powershell
 .\scripts\setup.ps1      # venv, npm installs, UI build, sandbox image if Docker is running
+# macOS / Linux: ./scripts/setup.sh  then  ./scripts/start.sh
 .\scripts\start.ps1      # http://127.0.0.1:8000  (UI + API, docs at /docs)
 .\scripts\start.ps1 -Dev # also runs Vite with hot reload on http://localhost:5173
 ```
@@ -56,7 +67,9 @@ CODELENS_MCP_TOKEN=<secret> CODELENS_MCP_PUBLIC_HOSTS=demo.example.com docker co
 ```
 
 - **One image** contains the UI and the API. Every run still happens in its own network-less, read-only `codelens-worker` container, started through the host's Docker socket.
-- **Access code:** set `CODELENS_ACCESS_CODE` so strangers can't spend your AI credits. Visitors are asked for the code once, so give it to the judges.
+- **Access codes:** set `CODELENS_ACCESS_CODE` so strangers can't spend your AI credits. Visitors are asked for the code once. Give each group its own code, for example `CODELENS_ACCESS_CODE=judges:abc123,team:xyz789`, so you can revoke one by removing it.
+- **Upgrading from a version before the non-root change:** the old data volume belongs to root. Run `docker compose down -v` once (this deletes stored runs) before `docker compose up -d --build`.
+- **Non-root:** the app container runs as an unprivileged user. On Linux, pass the host's docker group: `DOCKER_GID=$(getent group docker | cut -d: -f3) docker compose up -d`.
 - **Retention:** stored runs expire after 72 h (`CODELENS_RETENTION_HOURS`), and the 🗑 **delete run** button removes one immediately.
 
 ## Configuration
@@ -112,7 +125,7 @@ The CodeLens MCP server exposes 18 tools over the REST API:
 | Debugging & conversion | `convert_code`, `run_python`, `get_trace`, `get_step_state`, `get_source`, `explain_execution`, `propose_patch`, `validate_patch` |
 | Reverse engineering | `rea_analyze_javascript_application`, `rea_list_tools`, `rea_tool_schema`, `rea_call_tool` |
 
-- **Claude Code:** the repo's [`.mcp.json`](.mcp.json) registers the server automatically when you open the project. Keep the API running on port 8000.
+- **Claude Code:** the repo's [`.mcp.json`](.mcp.json) registers the server automatically when you open the project, on Windows, macOS or Linux (it runs `scripts/mcp.mjs`, which finds the backend's Python). Keep the API running on port 8000.
 - **Remote agents / Alexa+ (Streamable HTTP, endpoint `/mcp`):**
   ```powershell
   $env:CODELENS_MCP_TOKEN = "<long random secret>"
@@ -131,9 +144,9 @@ The CodeLens MCP server exposes 18 tools over the REST API:
 ## Tests
 
 ```powershell
-cd backend;  .\.venv\Scripts\python -m pytest     # 121 tests (REA and Docker tests skip if REA isn't installed or the sandbox image isn't built)
+cd backend;  .\.venv\Scripts\python -m pytest     # 141 tests (REA and Docker tests skip if REA isn't installed or the sandbox image isn't built)
 cd frontend; npm test; npm run typecheck
-cd frontend; npm run e2e                          # 17 browser checks against a running app (Chrome required)
+cd frontend; npm run e2e                          # 30 browser checks against a running app (Chrome required)
 ```
 
 CI (`.github/workflows/ci.yml`) runs all three on every push, including the Docker security tests on Linux.
@@ -172,5 +185,7 @@ Still on you: hosting the demo (see above), the 3-minute videos, and sharing the
 - **Python only for simulation.** Other languages are simulated by converting them to Python with the AI, so you watch the converted program.
 - **Sandbox libraries:** the standard library, numpy and pytest. Other packages would have to be added to `backend/worker/Dockerfile` (the network is off at run time).
 - **Per-run limits:** 5 s and up to 20,000 traced steps per run (`CODELENS_TRACE_BUDGET`). Longer programs keep running after tracing pauses, and their output and final crash are still recorded.
-- **Progress is per browser.** XP and achievements are stored in the browser, because there are no user accounts.
+- **No user accounts.** Progress lives in the browser and moves between devices with a progress code. Hosted demos are protected by shared, revocable access codes, not personal logins.
+- **English only.** The kid explanations, idea cards and challenges are written in English.
+- **Explanations are rule-based** (syntax tree + recorded values, so never invented). Unusual code gets more generic sentences; the optional AI explains failures in more depth.
 - **Docker sandbox verified:** it passes the spec §5.3 security matrix (`tests/test_docker_sandbox.py`) on Docker Desktop for Windows and on Linux.

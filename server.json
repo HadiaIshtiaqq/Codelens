@@ -1,11 +1,11 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.YOUR_GITHUB_USERNAME/codelens-ai",
+  "name": "io.github.HadiaIshtiaqq/codelens-ai",
   "title": "CodeLens AI + REA",
   "description": "Trace, explain, fix and test Python in a sandbox, plus REA reverse engineering tools.",
   "version": "1.0.0",
   "repository": {
-    "url": "https://github.com/YOUR_GITHUB_USERNAME/codelens-ai",
+    "url": "https://github.com/HadiaIshtiaqq/codelens-ai",
     "source": "github"
   },
   "remotes": [
