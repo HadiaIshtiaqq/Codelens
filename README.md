@@ -8,7 +8,9 @@ A Python debugging and reverse-engineering workspace:
   - Values are shown as labeled cardboard boxes, and lists as trains with numbered cars.
   - A **💡 New idea** card appears the first time each concept shows up (box, list, loop, if, trick…).
   - Errors get gentle **"Oops!"** messages that say how to fix them.
-  - Sentences can be read aloud (with a voice picker), there's a slow autoplay, big buttons, and 10 starter programs from "Hello, robot!" to "Find the bug!".
+  - **Press ▶ Start and Robo walks through the program by itself**, at a pace you pick: 🐢 slow, 🚶 normal, 🐇 fast, or ✋ "I press Next". Next, Back or ⏸ Pause take over at any time, and Robo lingers on new idea cards.
+  - A **🚩 → 🏁 progress track** can be dragged to any step. **Space** plays or pauses, and **← →** step. When the program ends, **🔁 Watch again** replays it.
+  - Sentences can be read aloud (with a voice picker). There are big buttons, and 10 starter programs from "Hello, robot!" to "Find the bug!".
   - **🧩 Blocks:** build programs by snapping blocks together (Blockly) instead of typing. The blocks become real Python, which Robo runs and explains.
   - **🏆 Challenges:** 8 missions, from "Say hello" to "Teach a trick". Each is checked automatically when you press Start, with kind hints and ⭐ stars.
   - **🔧 Help me fix it** repairs typing slips (a missing `:`, quote or bracket, wrong indentation, `=` instead of `==`) and common runtime bugs, then explains what changed.
