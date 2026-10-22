@@ -23,3 +23,11 @@ describe('compressed share links', () => {
     expect(await decodeProgram('not-valid')).toBeNull();
   });
 });
+
+describe('speakable text', () => {
+  it('turns symbols and emoji into speakable words', async () => {
+    const { speakable } = await import('./speech');
+    expect(speakable('📦 Sets total to 0 → total = 0')).toBe('Sets total to 0, so total equals 0');
+    expect(speakable('🗣️ On the screen: “hi”')).toBe('On the screen: "hi"');
+  });
+});

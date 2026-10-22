@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { MAIN_FILE, type Debugger } from '../hooks/useDebugger';
+import { useCodeExplanation } from '../hooks/useCodeExplanation';
 import { useGame } from '../hooks/useGame';
+import { ProgramPlan } from './ProgramPlan';
 import { detectNonPython } from '../lib/detect';
 import { callStackAt, changedVariables, stdoutUpTo } from '../lib/trace';
 import { vizAt } from '../lib/viz';
@@ -14,18 +16,20 @@ import { ProgramInput } from './ProgramInput';
 import { Timeline } from './Timeline';
 import { Toolbar } from './Toolbar';
 import { VariableInspector } from './VariableInspector';
+import { KidsView } from './kids/KidsView';
 
 // The AI panel pulls in Monaco's diff editor; load it only when first opened.
 const AIPanel = lazy(() => import('./AIPanel').then((m) => ({ default: m.AIPanel })));
 
-type Mode = 'game' | 'classic';
+type Mode = 'game' | 'classic' | 'kids';
 const MODE_KEY = 'codelens.view-mode';
 
 function loadMode(): Mode {
   try {
-    return localStorage.getItem(MODE_KEY) === 'classic' ? 'classic' : 'game';
+    const saved = localStorage.getItem(MODE_KEY);
+    return saved === 'classic' || saved === 'game' ? saved : 'kids'; // beginners first
   } catch {
-    return 'game';
+    return 'kids';
   }
 }
 
@@ -41,6 +45,10 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const [reveal, setReveal] = useState<{ line: number; nonce: number } | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [explainAll, setExplainAll] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [simpleWords, setSimpleWords] = useState(true);
+  // Plan + line notes for the file in the editor, built from the code itself (works before running).
+  const plan = useCodeExplanation(dbg.editorValue, simpleWords ? 'kid' : 'standard');
   const game = useGame(dbg);
   const revealLine = (line: number) => setReveal({ line, nonce: Date.now() });
 
@@ -78,10 +86,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   }, [run, stale]);
   // A narration explains the step; hide it while the user is guessing in Predict mode (it would give the answer away).
   const narration = event?.narration && !game.awaitingGuess ? event.narration : null;
-  const notes =
-    explainAll && run && !stale
-      ? run.summary.file_line_notes?.[activeFile] ?? (activeFile === MAIN_FILE ? run.summary.line_notes : null)
-      : null;
+  const notes = explainAll ? plan?.line_notes ?? null : null;
   const gapNote = event?.skipped_before
     ? `⋯ ${event.skipped_before.toLocaleString()} steps in the middle of this long run were skipped before this one`
     : event?.untraced_before
@@ -100,7 +105,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
 
   const modeSwitch = (
     <div role="radiogroup" aria-label="View mode" className="flex overflow-hidden rounded-md border border-slate-700 text-xs">
-      {(['game', 'classic'] as Mode[]).map((m) => (
+      {(['kids', 'game', 'classic'] as Mode[]).map((m) => (
         <button
           key={m}
           role="radio"
@@ -108,7 +113,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
           onClick={() => setMode(m)}
           className={`px-2.5 py-1 font-semibold ${mode === m ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
         >
-          {m === 'game' ? '🎮 Game' : '📋 Classic'}
+          {m === 'kids' ? '🧸 Kids' : m === 'game' ? '🎮 Game' : '📋 Classic'}
         </button>
       ))}
     </div>
@@ -119,11 +124,27 @@ export function DebuggerView({ dbg, onConvert }: Props) {
       className={`btn px-2 py-0.5 text-xs ${explainAll ? 'border-yellow-500 bg-yellow-700/40' : ''}`}
       aria-pressed={explainAll}
       onClick={() => setExplainAll(!explainAll)}
-      disabled={!run || stale}
       title="Show a one-line explanation next to every line of code"
     >
       📖 Explain every line
     </button>
+  );
+
+  const planToggle = (
+    <>
+      <button
+        className={`btn px-2 py-0.5 text-xs ${planOpen ? 'border-emerald-500 bg-emerald-800/50' : ''}`}
+        aria-pressed={planOpen}
+        onClick={() => setPlanOpen(!planOpen)}
+        title="A short plan of the whole program, top to bottom"
+      >
+        🗺 What does this program do?
+      </button>
+      <label className="flex items-center gap-1 text-xs text-slate-400" title="Explanations in everyday words, or short and precise">
+        <input type="checkbox" checked={simpleWords} onChange={(e) => setSimpleWords(e.target.checked)} />
+        simple words
+      </label>
+    </>
   );
 
   const stepBanner = event && (
@@ -138,6 +159,11 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const editor = (variant: 'game' | 'classic') => (
     <div className="flex min-h-0 flex-1 flex-col">
       <FileTabs dbg={dbg} runningFile={event ? eventFile : null} />
+      {planOpen && (
+        <div className="max-h-[40%] overflow-auto border-b border-slate-800 bg-emerald-950/30 px-3 py-2">
+          <ProgramPlan plan={plan} currentLine={activeLine} onLine={revealLine} />
+        </div>
+      )}
       <div className="relative min-h-0 flex-1">
         <CodeEditor
           path={activeFile}
@@ -154,6 +180,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
           lineNotes={notes}
           breakpoints={dbg.breakpointLines(activeFile)}
           onToggleBreakpoint={dbg.toggleBreakpoint}
+          hoverNotes={plan?.line_notes ?? null}
         />
       </div>
     </div>
@@ -168,6 +195,20 @@ export function DebuggerView({ dbg, onConvert }: Props) {
       <AIPanel dbg={dbg} onRevealLine={revealLine} />
     </Suspense>
   );
+
+  if (mode === 'kids') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/40 px-3 py-1">
+          {modeSwitch}
+          <span className="text-xs text-slate-400">Kids mode: big text, simple words, read aloud. Switch to Game or Classic for more tools.</span>
+        </div>
+        <div className="min-h-0 flex-1">
+          <KidsView dbg={dbg} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -187,6 +228,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/40 px-3 py-1">
         {modeSwitch}
         {explainAllToggle}
+        {planToggle}
         {stepBanner}
       </div>
 

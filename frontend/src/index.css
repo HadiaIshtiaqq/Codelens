@@ -168,3 +168,19 @@
   .cl-bubble, .cl-draw, .cl-toast { animation: none !important; }
   .cl-fall { display: none; }
 }
+
+/* Blockly toolbox: readable category names on a dark panel (Kids mode blocks) */
+.blocklyToolboxDiv,
+.blocklyToolbox {
+  background-color: #1e293b !important;
+}
+.blocklyTreeLabel,
+.blocklyToolboxCategoryLabel {
+  color: #f1f5f9 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+.blocklyTreeRow:hover,
+.blocklyToolboxCategory:hover {
+  background-color: #334155 !important;
+}

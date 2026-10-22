@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Debugger } from '../../hooks/useDebugger';
 import { ACHIEVEMENTS, type Game } from '../../hooks/useGame';
+import { speak, speechSupported, stopSpeaking } from '../../lib/speech';
+
+const READ_ALOUD_KEY = 'codelens.game.read-aloud';
+
+function loadReadAloud(): boolean {
+  try {
+    return localStorage.getItem(READ_ALOUD_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
 
 const SPEEDS: [string, number][] = [
   ['🐢 0.5×', 1100],
@@ -15,8 +26,12 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
   const [speed, setSpeed] = useState(600);
   const [pauseOnCrash, setPauseOnCrash] = useState(true);
   const [showTrophies, setShowTrophies] = useState(false);
+  const [readAloud, setReadAloud] = useState(loadReadAloud);
   const { run, step, total } = dbg;
   const startedAt = useRef(0);
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+  const speaking = readAloud && speechSupported;
 
   // Autoplay: advance one step per tick; stop at the end or (optionally) on a crash.
   useEffect(() => {
@@ -33,9 +48,36 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
       setPlaying(false);
       return;
     }
+    if (speaking) return; // with read-aloud on, the next step starts when the sentence has been spoken
     const id = setTimeout(() => dbg.goTo(step + 1), speed);
     return () => clearTimeout(id);
-  }, [playing, step, total, run, speed, pauseOnCrash, dbg]);
+  }, [playing, step, total, run, speed, pauseOnCrash, dbg, speaking]);
+
+  // Read each step's explanation aloud (not during a Predict-mode guess: it would give the answer away).
+  useEffect(() => {
+    try {
+      localStorage.setItem(READ_ALOUD_KEY, readAloud ? 'on' : 'off');
+    } catch {
+      /* ignore */
+    }
+    if (!speaking || !run || dbg.stale) {
+      stopSpeaking();
+      return;
+    }
+    const ev = run.events[step];
+    if (!ev || game.awaitingGuess) {
+      stopSpeaking();
+      return;
+    }
+    let pending: number | undefined;
+    speak(ev.narration ?? '', () => {
+      if (playingRef.current && step < total - 1) pending = window.setTimeout(() => dbg.goTo(step + 1), 250);
+    });
+    return () => window.clearTimeout(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, run, speaking, game.awaitingGuess, playing]);
+
+  useEffect(() => () => stopSpeaking(), []);
 
   useEffect(() => setPlaying(false), [run]);
 
@@ -131,7 +173,17 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
           </div>
         )}
       </div>
-      <button className="btn px-2" onClick={game.toggleSound} aria-pressed={game.sound} title={game.sound ? 'Sound on' : 'Sound off'}>
+      {speechSupported && (
+        <button
+          className={`btn px-2 ${readAloud ? 'border-sky-400 bg-sky-800' : ''}`}
+          onClick={() => setReadAloud(!readAloud)}
+          aria-pressed={readAloud}
+          title={readAloud ? 'Reading each step aloud (click to stop)' : 'Read each step aloud'}
+        >
+          🗣 {readAloud ? 'Reading aloud' : 'Read aloud'}
+        </button>
+      )}
+      <button className="btn px-2" onClick={game.toggleSound} aria-pressed={game.sound} title={game.sound ? 'Sound effects on' : 'Sound effects off'}>
         {game.sound ? '🔊' : '🔇'}
       </button>
     </div>

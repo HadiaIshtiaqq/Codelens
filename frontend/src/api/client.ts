@@ -1,6 +1,7 @@
 import type {
   ExecutionResponse,
   Explanation,
+  CodeExplanation,
   Conversion,
   Health,
   JsAnalysis,
@@ -183,6 +184,8 @@ export async function runStreaming(
 
 export const api = {
   health: () => request<Health>('GET', '/health'),
+  explainCode: (sourceCode: string, level: 'kid' | 'standard') =>
+    request<CodeExplanation>('POST', '/api/v1/explain-code', { source_code: sourceCode, level }),
   testTemplate: (executionId: string) =>
     request<{ tests: string }>('GET', `/api/v1/executions/${executionId}/test-template`).then((r) => r.tests),
   deleteExecution: (executionId: string) => request<{ deleted: boolean }>('DELETE', `/api/v1/executions/${executionId}`),

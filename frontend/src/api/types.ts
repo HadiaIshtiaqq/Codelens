@@ -20,6 +20,10 @@ export interface BaseTraceEvent {
   untraced_before?: boolean;
   /** One-line plain-English explanation of this step (AST + recorded values). */
   narration?: string;
+  /** The same step explained for a young beginner (Kids mode). */
+  kid_narration?: string;
+  /** The programming idea this step shows, e.g. 'variable', 'for-loop' (Kids mode idea cards). */
+  concept?: string;
   viz?: VizSnapshot;
 }
 
@@ -175,6 +179,14 @@ export interface Health {
   llm_provider: string;
   llm_model: string;
   features?: { rea_ui: boolean; convert: boolean; access_code_required?: boolean };
+}
+
+export interface CodeExplanation {
+  ok: boolean;
+  intro: string;
+  outline: { line: number; depth: number; text: string }[];
+  /** Plain explanation for each line that has code (keys are line numbers). */
+  line_notes: Record<string, string>;
 }
 
 export interface Conversion {

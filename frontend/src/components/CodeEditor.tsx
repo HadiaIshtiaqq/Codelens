@@ -1,5 +1,6 @@
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useEffect, useRef } from 'react';
+import { registerHoverProvider, setHoverNotes } from '../lib/hover';
 import { monaco } from '../lib/monaco';
 
 interface Props {
@@ -23,10 +24,13 @@ interface Props {
   /** Lines with a breakpoint, and the handler for clicking the gutter to toggle one. */
   breakpoints?: Set<number>;
   onToggleBreakpoint?: (line: number) => void;
+  fontSize?: number;
+  /** Explanations shown when hovering a line (keywords always get a glossary hover). */
+  hoverNotes?: Record<string, string> | null;
 }
 
 /** Monaco editor with step / failure line decorations (spec §4.1, FR-03). */
-export function CodeEditor({ path = 'main.py', value, onChange, activeLine, failLine, citedLines, onRun, revealRequest, variant = 'classic', onLineClick, inlineNote, lineNotes, breakpoints, onToggleBreakpoint }: Props) {
+export function CodeEditor({ path = 'main.py', value, onChange, activeLine, failLine, citedLines, onRun, revealRequest, variant = 'classic', onLineClick, inlineNote, lineNotes, breakpoints, onToggleBreakpoint, fontSize = 14, hoverNotes }: Props) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const decorations = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
   const runRef = useRef(onRun);
@@ -36,6 +40,11 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
   const toggleBpRef = useRef(onToggleBreakpoint);
   toggleBpRef.current = onToggleBreakpoint;
   const game = variant === 'game';
+
+  useEffect(() => {
+    registerHoverProvider();
+    setHoverNotes(path, hoverNotes ?? null);
+  }, [path, hoverNotes]);
 
   const onMount: OnMount = (editor) => {
     editorRef.current = editor as unknown as monaco.editor.IStandaloneCodeEditor;
@@ -137,7 +146,7 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
       onChange={(v) => onChange(v ?? '')}
       onMount={onMount}
       options={{
-        fontSize: 14,
+        fontSize,
         glyphMargin: true,
         lineDecorationsWidth: 16, // room for the breakpoint dot
         minimap: { enabled: false },
@@ -148,6 +157,7 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
         ariaLabel: 'Python source editor. Press Control+Enter to run.',
         renderLineHighlight: 'none',
         readOnly: !!onLineClick, // predict mode: clicks pick a line instead of editing
+        hover: { delay: 250 },
       }}
     />
   );
