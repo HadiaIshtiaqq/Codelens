@@ -213,6 +213,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const smallButton = 'rounded-lg border-2 px-2.5 py-1 text-sm font-bold transition';
   const bigButton = 'inline-flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-base font-bold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-40 2xl:px-4 2xl:py-2 2xl:text-lg';
 
   return (
@@ -288,27 +289,11 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
           🔁 From the start
         </button>
         <button
-          className={`${bigButton} ${explainAll ? 'border-yellow-300 bg-yellow-700' : 'border-yellow-500/60 bg-slate-800 hover:bg-slate-700'}`}
-          onClick={() => setExplainAll(!explainAll)}
-          aria-pressed={explainAll}
-          title="Write a short explanation next to every line"
-        >
-          📖 {explainAll ? 'Hide line notes' : 'Explain every line'}
-        </button>
-        <button
-          className={`${bigButton} border-amber-400 bg-amber-600 hover:bg-amber-500`}
+          className={`${bigButton} ml-auto border-amber-400 bg-amber-600 hover:bg-amber-500`}
           onClick={() => setShowChallenges(!showChallenges)}
           aria-expanded={showChallenges}
         >
           🏆 Challenges <span className="rounded-full bg-amber-900 px-2 text-sm">⭐ {stars.size}/{CHALLENGES.length}</span>
-        </button>
-        <button
-          className={`${bigButton} ${blocks ? 'border-pink-300 bg-pink-700' : 'border-pink-500/60 bg-slate-800 hover:bg-slate-700'}`}
-          onClick={() => setBlocks(!blocks)}
-          aria-pressed={blocks}
-          title="Build programs by snapping blocks together instead of typing"
-        >
-          {blocks ? '⌨️ Type code' : '🧩 Use blocks'}
         </button>
       </div>
 
@@ -336,9 +321,29 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
       <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-3 overflow-auto p-3 lg:auto-rows-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {/* Left: the code, big, with the robot on the current line */}
         <div className="flex flex-col gap-3 lg:min-h-0">
-          <div className="panel flex h-[420px] flex-col overflow-hidden rounded-2xl lg:h-auto lg:min-h-[440px] lg:flex-1">
-            <div className="border-b border-slate-800 px-4 py-2 text-base font-bold text-indigo-200">
-              {blocks ? '🧩 Snap blocks together (they turn into the code below)' : kidFile === 'main.py' ? "📜 The code (Robo's instructions)" : `📜 Robo is inside ${kidFile}`}
+          <div className="panel flex h-[420px] flex-col overflow-hidden rounded-2xl lg:h-auto lg:min-h-[280px] lg:flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-2">
+              <span className="text-base font-bold text-indigo-200">
+                {blocks ? '🧩 Snap blocks together (they turn into the code below)' : kidFile === 'main.py' ? "📜 The code (Robo's instructions)" : `📜 Robo is inside ${kidFile}`}
+              </span>
+              <span className="flex gap-2">
+                <button
+                  className={`${smallButton} ${explainAll ? 'border-yellow-300 bg-yellow-700' : 'border-yellow-500/60 hover:bg-slate-800'}`}
+                  onClick={() => setExplainAll(!explainAll)}
+                  aria-pressed={explainAll}
+                  title="Write a short explanation next to every line"
+                >
+                  📖 {explainAll ? 'Hide line notes' : 'Explain every line'}
+                </button>
+                <button
+                  className={`${smallButton} ${blocks ? 'border-pink-300 bg-pink-700' : 'border-pink-500/60 hover:bg-slate-800'}`}
+                  onClick={() => setBlocks(!blocks)}
+                  aria-pressed={blocks}
+                  title="Build programs by snapping blocks together instead of typing"
+                >
+                  {blocks ? '⌨️ Type code' : '🧩 Use blocks'}
+                </button>
+              </span>
             </div>
             {blocks && (
               <div className="h-[380px] shrink-0 border-b border-slate-800">
@@ -533,14 +538,29 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
                     ? sentence
                     : phase === 'running'
                       ? 'Getting ready…'
-                      : 'Hi! I\'m Robo. Pick a program, then press ▶ Start. I\'ll follow the code one line at a time and tell you what happens.'}
+                      : run && stale
+                        ? "You changed the code! Press ▶ Start and I'll follow the new version."
+                        : 'Hi! I\'m Robo. Pick a program, then press ▶ Start. I\'ll follow the code one line at a time and tell you what happens.'}
                 </p>
                 {run && !stale && step === 0 && total > 1 && (
                   <p className="mt-2 text-base text-sky-200">
                     {playing ? 'Robo will move on by itself. Press ⏸ Pause any time to stop and look.' : 'Press the blue “Next step ➡” button to see what happens next.'}
                   </p>
                 )}
-                {success && <p className="mt-2 text-lg text-emerald-200">🎉 You followed the whole program! Pick another one, or change the code and press ▶ Start.</p>}
+                {success && (
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <p className="text-lg text-emerald-200">🎉 You followed the whole program! Pick another one, or change the code and press ▶ Start.</p>
+                    <button
+                      className="rounded-xl border-2 border-emerald-300 bg-emerald-700 px-3 py-1 text-base font-bold hover:bg-emerald-600"
+                      onClick={() => {
+                        dbg.goTo(0);
+                        setPlaying(pace !== 'manual');
+                      }}
+                    >
+                      🔁 Watch again
+                    </button>
+                  </div>
+                )}
                 {run && !stale && run.summary.error && (
                   <div className="mt-3 rounded-2xl border-2 border-orange-400/60 bg-slate-950/60 p-3">
                     {!fixAsked ? (
