@@ -194,6 +194,25 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     move();
   };
 
+  // Keyboard: Space plays or pauses, the arrow keys step (not while typing in the code or a box).
+  const keys = useRef({ playing, setPlaying, stepBy, dbg, ready: false });
+  keys.current = { playing, setPlaying, stepBy, dbg, ready: !!run && !stale };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = keys.current;
+      const target = e.target as HTMLElement | null;
+      if (!k.ready || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (target?.closest('input, textarea, select, button, [contenteditable="true"], .monaco-editor, .blocklySvg, .blocklyWidgetDiv')) return;
+      if (e.key === ' ') k.setPlaying(!k.playing);
+      else if (e.key === 'ArrowRight') k.stepBy(k.dbg.next);
+      else if (e.key === 'ArrowLeft') k.stepBy(k.dbg.prev);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const bigButton = 'inline-flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-base font-bold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-40 2xl:px-4 2xl:py-2 2xl:text-lg';
 
   return (
@@ -292,6 +311,27 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
           {blocks ? '⌨️ Type code' : '🧩 Use blocks'}
         </button>
       </div>
+
+      {run && !stale && total > 1 && (
+        <div className="flex items-center gap-3 border-b border-indigo-900/60 px-4 py-1.5">
+          <span aria-hidden>🚩</span>
+          <input
+            type="range"
+            min={0}
+            max={total - 1}
+            value={step}
+            onChange={(e) => stepBy(() => dbg.goTo(Number(e.target.value)))}
+            className="h-2 flex-1 cursor-pointer accent-sky-400"
+            aria-label="Robo's place in the program"
+            aria-valuetext={`Step ${step + 1} of ${total}`}
+          />
+          <span aria-hidden>🏁</span>
+          <span className="hidden text-sm text-indigo-300 md:inline">
+            Keys: <kbd className="rounded bg-slate-800 px-1">Space</kbd> play/pause · <kbd className="rounded bg-slate-800 px-1">←</kbd>{' '}
+            <kbd className="rounded bg-slate-800 px-1">→</kbd> steps
+          </span>
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-3 overflow-auto p-3 lg:auto-rows-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {/* Left: the code, big, with the robot on the current line */}

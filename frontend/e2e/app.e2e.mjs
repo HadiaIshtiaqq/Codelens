@@ -153,6 +153,16 @@ await check('kids: Start plays the steps by itself', async () => {
   if ((await page.getByText(/Step \d+ of \d+/).first().innerText()) !== paused) throw new Error('kept going after Pause');
   await page.getByLabel('How fast Robo goes').selectOption('manual');
 });
+await check('kids: progress track and arrow keys move Robo', async () => {
+  await page.getByLabel("Robo's place in the program").fill('0');
+  await page.getByText(/Step 1 of \d+/).waitFor();
+  await page.locator('#robo-sentence').click(); // focus the page, not a control
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.getByText(/Step 3 of \d+/).waitFor();
+  await page.keyboard.press('ArrowLeft');
+  await page.getByText(/Step 2 of \d+/).waitFor();
+});
 await check('kids: gentle oops', async () => {
   await page.getByLabel('Pick a program').selectOption('bug');
   await page.getByRole('button', { name: '▶ Start' }).click();
