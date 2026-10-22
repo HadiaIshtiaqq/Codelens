@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from app.schemas import ExecutionRequest, ExecutionResponse, TraceEvent, TracePage
 from app.services.evidence import call_stack_at
+from app.services.kidspeak import annotate_kids
 from app.services.narrate import annotate, line_notes
 from app.services.store import ExecutionRecord
 from app.services.testgen import test_template
@@ -53,6 +54,7 @@ async def _execute(request: Request, req: ExecutionRequest) -> tuple[str, Execut
         )
     record = ExecutionRecord(source=req.source_code, result=result, files=req.files, stdin=req.stdin)
     annotate(record.sources(), result.events)  # AST + trace narration; parses, never executes
+    annotate_kids(record.sources(), result.events)  # the same, in words for young beginners
     state.stores.executions.put(execution_id, record)
     return execution_id, record
 

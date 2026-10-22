@@ -200,6 +200,10 @@ class _Narrator:
             if nxt["stack_depth"] < ev["stack_depth"]:
                 return None
             if nxt["stack_depth"] == ev["stack_depth"] and nxt["function"] == ev["function"]:
+                # Python 3.12+ runs comprehensions inside the same frame, repeating the line's event:
+                # the line has finished only when the next event is somewhere else.
+                if nxt["event"] == "line" and nxt["line"] == ev["line"] and ev["event"] == "line":
+                    continue
                 return nxt
         return None
 
@@ -270,14 +274,14 @@ class _Narrator:
         elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
             note += now(_target_names(node.target))
         elif isinstance(node, (ast.If, ast.While)):
-            if after and after["event"] == "line":
+            if after and after["event"] in ("line", "return"):
                 start, end = _body_span(node.body)
-                taken = start <= after["line"] <= end
+                taken = after["event"] == "line" and start <= after["line"] <= end
                 note += " → True" if taken else (" → False, so the loop ends" if isinstance(node, ast.While) else " → False")
         elif isinstance(node, ast.For):
-            if after and after["event"] == "line":
+            if after and after["event"] in ("line", "return"):
                 start, end = _body_span(node.body)
-                if start <= after["line"] <= end:
+                if after["event"] == "line" and start <= after["line"] <= end:
                     note = f"Loop: {_src(node.target)} takes the next value from {_src(node.iter)}" + now(_target_names(node.target))
                 else:
                     note = f"Loop over {_src(node.iter)} is finished: no values left"

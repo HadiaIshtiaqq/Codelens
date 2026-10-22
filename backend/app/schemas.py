@@ -84,6 +84,8 @@ class TraceEvent(BaseModel):
     skipped_before: Optional[int] = Field(default=None, description="Steps omitted just before this one (long runs)")
     untraced_before: Optional[bool] = Field(default=None, description="Line tracing paused before this step (long runs)")
     narration: Optional[str] = Field(default=None, description="One-line plain-English explanation of this step")
+    kid_narration: Optional[str] = Field(default=None, description="The same step explained for a young beginner")
+    concept: Optional[str] = Field(default=None, description="The programming idea this step shows (for intro cards)")
     viz: Optional[dict[str, Any]] = Field(default=None, description="Frames + heap snapshot for the visual view")
     exception: Optional[ExceptionDetail] = None
     stdout_chunk: Optional[str] = None
