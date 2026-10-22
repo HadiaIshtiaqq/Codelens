@@ -1,0 +1,212 @@
+// End-to-end browser tests for the CodeLens workspace.
+//
+//   1. Start the app (API + built UI):   scripts/start.ps1  (or uvicorn, see README)
+//   2. Run:                              npm run e2e
+//
+// Env: E2E_BASE_URL (default http://127.0.0.1:8000), CHROME_PATH (a Chrome/Chromium binary),
+//      E2E_OUT (screenshot folder, default e2e/screenshots).
+// Exits non-zero if any check fails, so CI can gate on it.
+import { existsSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+
+const BASE = (process.env.E2E_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+const OUT = process.env.E2E_OUT ?? fileURLToPath(new URL('./screenshots/', import.meta.url));
+const CHROME =
+  process.env.CHROME_PATH ??
+  ['C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find(
+    (p) => existsSync(p),
+  );
+mkdirSync(OUT, { recursive: true });
+
+const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+const errors = [];
+let failures = 0;
+page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+page.on('console', (m) => m.type() === 'error' && !m.text().includes('401') && errors.push(`console: ${m.text()}`));
+
+async function check(name, fn) {
+  try {
+    await fn();
+    console.log('OK  ', name);
+  } catch (e) {
+    failures++;
+    console.log('FAIL', name, '-', e.message.split('\n')[0]);
+    await page.screenshot({ path: `${OUT}/fail-${name.replace(/\W+/g, '_')}.png` }).catch(() => {});
+  }
+}
+
+/** Open the app with `source` as main.py (via a share link, so Monaco auto-indent can't interfere). */
+async function load(source) {
+  const enc = Buffer.from(source, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await page.goto(`${BASE}/`);
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(`${BASE}/#code=${enc}`);
+  await page.reload();
+  await page.waitForSelector('.monaco-editor', { timeout: 30000 });
+}
+
+const run = () => page.getByRole('button', { name: /Run Code/ }).click();
+const status = (text) => page.getByRole('status').filter({ hasText: text }).waitFor({ timeout: 30000 });
+const banner = () => page.getByText(/step \d+ · line \d+/).first().innerText();
+
+const PROGRAM = `class Node:
+    def __init__(self, value):
+        self.value = value
+        self.next = None
+
+
+scores = [90, 72, 85]
+alias = scores
+info = {"name": "Ada", "scores": scores}
+head = Node(1)
+head.next = Node(2)
+
+
+def average(xs):
+    total = 0
+    for i in range(len(xs) + 1):
+        total += xs[i]
+    return total / len(xs)
+
+
+print("start")
+print(average(scores))
+`;
+
+// ---------------------------------------------------------------- game view
+await load(PROGRAM);
+await check('game view is the default', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Game' }).waitFor());
+await check('run lands on the crash', async () => {
+  await run();
+  await status('IndexError');
+  await page.getByText(/💥 IndexError: list index out of range/).first().waitFor();
+});
+await check('board: frames, objects, arrows, aliasing', async () => {
+  await page.getByText('Frames · where the robot is').waitFor();
+  if ((await page.locator('svg path.cl-draw').count()) < 3) throw new Error('too few arrows');
+  await page.getByText(/shared by .*scores/).first().waitFor();
+});
+await check('screen-reader description of the board', async () => {
+  const text = await page.locator('p.sr-only').first().innerText();
+  if (!text.includes('average') || !text.includes('the same object as')) throw new Error(text);
+});
+await check('one-line explanation beside the active line', async () => {
+  await page.locator('.cl-inline-note').first().waitFor();
+  const note = await page.getByText(/^🗣 /).first().innerText();
+  if (!note.includes('Crash!')) throw new Error(note);
+});
+await page.screenshot({ path: `${OUT}/1-crash.png` });
+await check('explain every line', async () => {
+  await page.getByRole('button', { name: /Explain every line/ }).click();
+  await page.locator('.cl-line-note').first().waitFor();
+  await page.getByRole('button', { name: /Explain every line/ }).click();
+});
+await check('breakpoints + continue', async () => {
+  await page.locator('.monaco-editor .line-numbers', { hasText: /^17$/ }).first().click();
+  await page.locator('.cl-bp').first().waitFor();
+  await page.keyboard.press('Alt+Home');
+  await page.getByRole('button', { name: /Continue/ }).click();
+  if (!(await banner()).includes('line 17')) throw new Error(await banner());
+  await page.getByRole('button', { name: 'Clear all breakpoints' }).click();
+});
+await check('game over, replay and autoplay', async () => {
+  await page.keyboard.press('Alt+End');
+  await page.getByText('GAME OVER').waitFor();
+  await page.getByRole('button', { name: '↺ Replay' }).click();
+  await page.getByLabel('Playback speed').selectOption({ label: '⚡ 4×' });
+  await page.getByRole('button', { name: '▶ Play' }).click();
+  await page.waitForTimeout(1500);
+  if (Number(await page.locator('#step-slider').inputValue()) < 5) throw new Error('autoplay did not advance');
+  await page.getByRole('button', { name: /Pause/ }).click().catch(() => {});
+});
+await check('predict mode', async () => {
+  await page.keyboard.press('Alt+Home');
+  await page.getByRole('button', { name: /Predict mode OFF/ }).click();
+  await page.keyboard.press('F10');
+  await page.getByText(/Where will the robot go next/).waitFor();
+  await page.locator('.monaco-editor .view-line').nth(0).click();
+  await page.getByText(/Correct!|Not quite/).first().waitFor();
+  await page.getByRole('button', { name: /Predict mode ON/ }).click();
+});
+await check('generated tests from the run', async () => {
+  await page.getByRole('button', { name: /AI coach/ }).click();
+  await page.getByRole('tab', { name: /Test Results/ }).click();
+  await page.locator('.monaco-editor', { hasText: 'Generated from your last run' }).first().waitFor({ timeout: 10000 });
+  await page.locator('.monaco-editor', { hasText: 'def test_average_does_not_crash' }).first().waitFor();
+});
+
+// ---------------------------------------------------------------- input(), files, long runs
+await check('program input feeds input()', async () => {
+  await load("name = input('Name? ')\nage = int(input())\nprint(name, age + 1)\n");
+  await page.getByRole('textbox', { name: /Program input/ }).fill('Ada\n36\n');
+  await run();
+  await status('EXIT 0');
+  await page.getByRole('tab', { name: 'Full stdout' }).click();
+  await page.getByRole('log').filter({ hasText: 'Ada 37' }).first().waitFor();
+});
+await check('multi-file project: the robot follows into the module', async () => {
+  await load('from geometry import area\nprint(area(2))\n');
+  await page.getByRole('button', { name: '＋ file' }).click();
+  await page.getByLabel('New file name').fill('geometry');
+  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('tab', { name: 'geometry.py' }).waitFor();
+  await page.locator('.monaco-editor .view-lines').first().click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.insertText('def area(r): return 3 * r * r\n');
+  await run();
+  await status('EXIT 0');
+  await page.getByRole('tab', { name: 'Full stdout' }).click();
+  await page.getByRole('log').filter({ hasText: '12' }).first().waitFor();
+  for (let i = 0; i < 30 && !(await banner()).includes('geometry.py'); i++) await page.keyboard.press('F10');
+  if (!(await banner()).includes('of geometry.py')) throw new Error(await banner());
+  await page.locator('[role="tab"][aria-selected="true"]', { hasText: 'geometry.py' }).waitFor();
+});
+await page.screenshot({ path: `${OUT}/2-multifile.png` });
+await check('long run keeps the ending and marks the gap', async () => {
+  await load('data = list(range(10))\nfor n in range(300000):\n    total = n\nprint(data[total])\n');
+  await run();
+  await status('IndexError');
+  await page.getByText(/middle steps skipped|recording paused/).first().waitFor();
+  await page.getByRole('radio', { name: /Classic/ }).click();
+  await page.getByText(/steps skipped|line recording paused/).first().waitFor();
+  await page.getByRole('radio', { name: /Game/ }).click();
+});
+await check('delete run', async () => {
+  await page.getByRole('button', { name: /delete run/ }).click();
+  await page.getByRole('status').filter({ hasText: 'IDLE' }).waitFor();
+});
+
+// ---------------------------------------------------------------- other tabs and layouts
+await check('code converter tab loads', async () => {
+  await page.getByRole('tab', { name: /Code Converter/ }).click();
+  await page.getByText(/Paste code in any language|AI is offline/).first().waitFor();
+  await page.getByRole('tab', { name: /Python Debugger/ }).click();
+});
+await check('classic view', async () => {
+  await page.getByRole('radio', { name: /Classic/ }).click();
+  await page.getByText('Timeline').first().waitFor();
+  await page.getByRole('radio', { name: /Game/ }).click();
+});
+await check('phone-width layout stacks the board', async () => {
+  await page.setViewportSize({ width: 400, height: 860 });
+  await load('xs = [1, 2]\nys = xs\n');
+  await run();
+  await status('EXIT 0');
+  const frames = await page.getByText('Frames · where the robot is').boundingBox();
+  const objects = await page.getByText('Objects · what they point at').boundingBox();
+  if (!frames || !objects || objects.y <= frames.y) throw new Error('board not stacked vertically');
+  await page.screenshot({ path: `${OUT}/3-phone.png`, fullPage: true });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+});
+
+if (errors.length) {
+  failures++;
+  console.log(`BROWSER ERRORS:\n${errors.join('\n')}`);
+} else {
+  console.log('no browser errors');
+}
+await browser.close();
+console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
+process.exit(failures ? 1 : 0);

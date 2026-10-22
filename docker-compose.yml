@@ -1,0 +1,65 @@
+# Hosted CodeLens on any Linux VM (or Docker Desktop) with Docker + Compose:
+#
+#   cp backend/.env.example backend/.env      # add NEBIUS_API_KEY, CODELENS_ACCESS_CODE
+#   docker compose up -d --build              # http://<server>:8000
+#   CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d   # + automatic HTTPS
+#   docker compose --profile mcp up -d        # + MCP endpoint for Alexa+/agents on :8765/mcp
+#
+# Security note: the app container gets the host's Docker socket so it can start one
+# sandbox container per run. That makes the app container as powerful as Docker itself,
+# so only run this image (not user code) with it; user code always runs in the
+# separate, network-less, read-only codelens-worker containers.
+
+services:
+  worker-image:
+    build: ./backend/worker
+    image: codelens-worker:latest
+    entrypoint: ["true"]  # build-only: produces the sandbox image, then exits
+
+  app:
+    build: .
+    image: codelens-app:latest
+    restart: unless-stopped
+    depends_on:
+      worker-image:
+        condition: service_completed_successfully
+    ports:
+      - "${CODELENS_PORT:-8000}:8000"
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      CODELENS_SANDBOX: docker
+      CODELENS_CORS_ORIGINS: ${CODELENS_CORS_ORIGINS:-http://localhost:8000}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codelens-data:/app/backend/data
+
+  https:
+    profiles: ["https"]
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["80:80", "443:443"]
+    command: caddy reverse-proxy --from ${CODELENS_DOMAIN:-localhost} --to app:8000
+    volumes:
+      - caddy-data:/data
+
+  mcp:
+    profiles: ["mcp"]
+    image: codelens-app:latest
+    restart: unless-stopped
+    depends_on: [app]
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      CODELENS_API_URL: http://app:8000
+      CODELENS_MCP_TOKEN: ${CODELENS_MCP_TOKEN:-}  # the server refuses to start publicly without it
+      CODELENS_MCP_PUBLIC_HOSTS: ${CODELENS_MCP_PUBLIC_HOSTS:-}
+    command: ["python", "-m", "app.mcp_server", "--http", "--host", "0.0.0.0", "--port", "8765"]
+    ports: ["8765:8765"]
+
+volumes:
+  codelens-data:
+  caddy-data:

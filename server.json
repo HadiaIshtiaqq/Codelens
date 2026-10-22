@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.YOUR_GITHUB_USERNAME/codelens-ai",
+  "title": "CodeLens AI + REA",
+  "description": "Trace, explain, fix and test Python in a sandbox, plus REA reverse engineering tools.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/YOUR_GITHUB_USERNAME/codelens-ai",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://YOUR_PUBLIC_HOST/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <CODELENS_MCP_TOKEN> configured on the server",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

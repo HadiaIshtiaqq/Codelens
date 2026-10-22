@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply flex min-h-0 flex-col rounded-lg border border-slate-800 bg-slate-900/70;
+  }
+  .panel-title {
+    @apply flex items-center justify-between gap-2 border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400;
+  }
+  .btn {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply border-blue-500 bg-blue-600 hover:bg-blue-500;
+  }
+  .btn-warn {
+    @apply border-orange-500 bg-orange-600 hover:bg-orange-500;
+  }
+  .input {
+    @apply rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500;
+  }
+  .tab {
+    @apply rounded-t-md px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-slate-100 aria-selected:bg-slate-800 aria-selected:text-white;
+  }
+  .kbd {
+    @apply rounded border border-slate-600 bg-slate-800 px-1 font-mono text-[10px] text-slate-300;
+  }
+}
+
+/* Monaco line decorations: colour + glyph so meaning never relies on colour alone. */
+.cl-step-line {
+  background: rgba(59, 130, 246, 0.22);
+  border-left: 3px solid #3b82f6;
+}
+.cl-fail-line {
+  background: rgba(249, 115, 22, 0.24);
+  border-left: 3px solid #f97316;
+}
+.cl-cited-line {
+  background: rgba(250, 204, 21, 0.1);
+}
+.cl-step-glyph::before {
+  content: '▶';
+  color: #60a5fa;
+  font-size: 13px;
+  padding-left: 4px;
+}
+.cl-fail-glyph::before {
+  content: '✖';
+  color: #fb923c;
+  font-size: 13px;
+  padding-left: 4px;
+}
+.cl-step-fail-glyph::before {
+  content: '▶✖';
+  color: #fb923c;
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------------
+   Game view
+   ------------------------------------------------------------------------- */
+.cl-stage-bg {
+  background-color: #070d1a;
+  background-image:
+    radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.12), transparent 45%),
+    radial-gradient(circle at 90% 100%, rgba(249, 115, 22, 0.08), transparent 40%),
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, 24px 24px, 24px 24px;
+}
+@keyframes cl-pop {
+  0% { transform: scale(0.6); filter: brightness(2); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); filter: none; }
+}
+.cl-pop { animation: cl-pop 0.35s ease-out; }
+@keyframes cl-slide-in {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+.cl-slide-in { animation: cl-slide-in 0.3s ease-out; }
+@keyframes cl-appear {
+  from { opacity: 0; transform: translateY(10px) scale(0.95); }
+  to { opacity: 1; transform: none; }
+}
+.cl-appear { animation: cl-appear 0.35s ease-out; }
+@keyframes cl-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px) rotate(-1deg); }
+  40% { transform: translateX(6px) rotate(1deg); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.cl-shake { animation: cl-shake 0.45s ease-in-out; }
+.cl-shake-soft { animation: cl-shake 0.35s ease-in-out; }
+@keyframes cl-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.cl-bob { animation: cl-bob 1.2s ease-in-out infinite; }
+@keyframes cl-float-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.cl-float-up { animation: cl-float-up 0.4s ease-out; }
+@keyframes cl-bubble {
+  0% { opacity: 0; transform: scale(0.5) translateY(10px); transform-origin: bottom left; }
+  70% { transform: scale(1.05); }
+  100% { opacity: 1; transform: none; }
+}
+.cl-bubble { animation: cl-bubble 0.35s ease-out; }
+@keyframes cl-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.cl-draw { stroke-dasharray: 1; animation: cl-draw 0.6s ease-out; } /* paths use pathLength=1 */
+@keyframes cl-fall {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0.6; }
+}
+.cl-fall { animation: cl-fall linear forwards; }
+@keyframes cl-toast {
+  from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+  to { opacity: 1; transform: none; }
+}
+.cl-toast { animation: cl-toast 0.25s ease-out; }
+
+/* Editor glyphs in game mode */
+.cl-robot-glyph::before { content: '🤖'; font-size: 13px; }
+.cl-boom-glyph::before { content: '💥'; font-size: 13px; }
+.cl-predict-line { cursor: pointer; }
+/* Breakpoints: a red dot (shape + colour) in the gutter, plus a faint line tint */
+.cl-bp {
+  margin-left: 3px;
+  width: 10px !important;
+  height: 10px !important;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px #7f1d1d;
+}
+.cl-bp-line { background: rgba(239, 68, 68, 0.08); }
+.monaco-editor .margin-view-overlays .line-numbers { cursor: pointer; }
+/* One-line explanations rendered after code lines */
+.cl-inline-note {
+  color: #fde68a !important;
+  background: rgba(250, 204, 21, 0.12);
+  border-radius: 4px;
+  font-style: italic;
+}
+.cl-line-note {
+  color: #64748b !important;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-pop, .cl-slide-in, .cl-appear, .cl-shake, .cl-shake-soft, .cl-bob, .cl-float-up,
+  .cl-bubble, .cl-draw, .cl-toast { animation: none !important; }
+  .cl-fall { display: none; }
+}

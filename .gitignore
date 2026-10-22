@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+backend/.env
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# REA analysis targets are user data
+rea-workspace/*
+!rea-workspace/sample-app/
+backend/data/
+
+# Claude Code session settings (personal)
+.claude/

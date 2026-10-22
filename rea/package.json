@@ -1,0 +1,8 @@
+{
+  "name": "codelens-rea",
+  "private": true,
+  "description": "Pinned REA (rea-agents) toolchain used by the CodeLens backend",
+  "dependencies": {
+    "rea-agents": "6.7.0"
+  }
+}
