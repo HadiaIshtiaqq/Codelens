@@ -115,7 +115,10 @@ def words(node: ast.AST) -> str:
         if isinstance(node, ast.Dict):
             return f"a dictionary with {len(node.keys)} labels"
         if isinstance(node, ast.Subscript):
-            return f"item {words(node.slice)} of {words(node.value)}"
+            index = node.slice
+            if isinstance(index, ast.Constant) and isinstance(index.value, int):
+                return f"item {index.value} of {words(node.value)}"
+            return f"what {words(node.value)} has for {words(index)}"
         if isinstance(node, ast.Call):
             fn = node.func
             if isinstance(fn, ast.Name):

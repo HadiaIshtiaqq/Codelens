@@ -158,16 +158,16 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     await dbg.execute();
   };
 
-  const bigButton = 'inline-flex items-center gap-2 rounded-2xl border-2 px-5 py-3 text-lg font-bold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-40';
+  const bigButton = 'inline-flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-base font-bold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-40 2xl:px-4 2xl:py-2 2xl:text-lg';
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-gradient-to-b from-indigo-950 via-slate-950 to-slate-950">
       {/* Controls: few, big, labelled with words and pictures */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-indigo-900 px-4 py-3" role="toolbar" aria-label="Kids controls">
+      <div className="flex flex-wrap items-center gap-2 border-b border-indigo-900 px-3 py-2" role="toolbar" aria-label="Kids controls">
         <label className="flex items-center gap-2 text-base font-semibold text-indigo-100">
-          📚 Pick a program:
+          📚 <span className="hidden 2xl:inline">Pick a program:</span>
           <select
-            className="input py-2 text-base"
+            className="input py-1.5 text-base"
             defaultValue=""
             aria-label="Pick a program"
             onChange={(e) => {
@@ -199,7 +199,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
           ⬅ Back
         </button>
         <button
-          className={`${bigButton} border-sky-300 bg-sky-600 text-xl hover:bg-sky-500`}
+          className={`${bigButton} border-sky-300 bg-sky-600 hover:bg-sky-500 2xl:text-xl`}
           onClick={dbg.next}
           disabled={!run || stale || step >= total - 1}
           aria-keyshortcuts="F10"
@@ -243,39 +243,12 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
         >
           {blocks ? '⌨️ Type code' : '🧩 Use blocks'}
         </button>
-        {speechSupported && (
-          <div className="ml-auto flex items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-2 rounded-2xl border-2 border-slate-600 px-4 py-2 text-base font-semibold">
-              <input type="checkbox" className="h-5 w-5" checked={readAloud} onChange={(e) => setReadAloud(e.target.checked)} />
-              🔊 Read aloud
-            </label>
-            {readAloud && voices.length > 1 && (
-              <select
-                className="input max-w-[180px] py-2 text-sm"
-                aria-label="Voice"
-                value={voice}
-                onChange={(e) => {
-                  setVoice(e.target.value);
-                  chooseVoice(e.target.value);
-                  speak("Hi, I'm Robo! This is how I sound.");
-                }}
-              >
-                <option value="">Default voice</option>
-                {voices.map((v) => (
-                  <option key={v.name} value={v.name}>
-                    {v.name.replace(/^(Microsoft|Google)\s*/, '')}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-3 overflow-auto p-3 lg:auto-rows-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {/* Left: the code, big, with the robot on the current line */}
         <div className="flex flex-col gap-3 lg:min-h-0">
-          <div className="panel h-[360px] overflow-hidden rounded-2xl lg:h-auto lg:min-h-[300px] lg:flex-1">
+          <div className="panel flex h-[420px] flex-col overflow-hidden rounded-2xl lg:h-auto lg:min-h-[440px] lg:flex-1">
             <div className="border-b border-slate-800 px-4 py-2 text-base font-bold text-indigo-200">
               {blocks ? '🧩 Snap blocks together (they turn into the code below)' : kidFile === 'main.py' ? "📜 The code (Robo's instructions)" : `📜 Robo is inside ${kidFile}`}
             </div>
@@ -318,7 +291,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
             <h2 id="screen-title" className="mb-1 text-base font-bold text-emerald-200">
               📺 The screen
             </h2>
-            <pre className="min-h-[60px] whitespace-pre-wrap font-mono text-xl text-emerald-300" role="log">
+            <pre className="max-h-40 min-h-[40px] overflow-auto whitespace-pre-wrap font-mono text-lg text-emerald-300" role="log">
               {screen || <span className="text-base text-slate-500">Nothing on the screen yet.</span>}
             </pre>
           </section>
@@ -426,19 +399,48 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
           )}
 
           <section
-            className={`rounded-3xl border-4 p-5 shadow-xl ${crashed ? 'border-orange-400 bg-orange-950/70' : success ? 'border-emerald-400 bg-emerald-950/60' : 'border-sky-400 bg-sky-950/60'}`}
+            className={`rounded-3xl border-4 p-4 shadow-xl ${crashed ? 'border-orange-400 bg-orange-950/70' : success ? 'border-emerald-400 bg-emerald-950/60' : 'border-sky-400 bg-sky-950/60'}`}
             aria-live="polite"
             aria-labelledby="robot-says"
           >
             <div className="flex items-start gap-4">
-              <div className={`text-6xl ${crashed ? 'cl-shake' : 'cl-bob'}`} aria-hidden>
+              <div className={`text-5xl ${crashed ? 'cl-shake' : 'cl-bob'}`} aria-hidden>
                 {crashed ? '😵' : success ? '🥳' : '🤖'}
               </div>
               <div className="min-w-0 flex-1">
-                <h2 id="robot-says" className="text-sm font-bold uppercase tracking-wider text-sky-300">
-                  {run && !stale ? `Step ${step + 1} of ${total}` : 'Robo says'}
-                </h2>
-                <p key={event?.step ?? 'idle'} className="cl-float-up mt-1 text-2xl font-semibold leading-snug text-white">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 id="robot-says" className="text-sm font-bold uppercase tracking-wider text-sky-300">
+                    {run && !stale ? `Step ${step + 1} of ${total}` : 'Robo says'}
+                  </h2>
+                  {speechSupported && (
+                    <div className="flex items-center gap-2">
+                      <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-sky-700 px-2 py-1 text-sm font-semibold text-sky-100">
+                        <input type="checkbox" className="h-4 w-4" checked={readAloud} onChange={(e) => setReadAloud(e.target.checked)} />
+                        🔊 Read aloud
+                      </label>
+                      {readAloud && voices.length > 1 && (
+                        <select
+                          className="input max-w-[160px] py-1 text-xs"
+                          aria-label="Voice"
+                          value={voice}
+                          onChange={(e) => {
+                            setVoice(e.target.value);
+                            chooseVoice(e.target.value);
+                            speak("Hi, I'm Robo! This is how I sound.");
+                          }}
+                        >
+                          <option value="">Default voice</option>
+                          {voices.map((v) => (
+                            <option key={v.name} value={v.name}>
+                              {v.name.replace(/^(Microsoft|Google)\s*/, '')}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <p id="robo-sentence" key={event?.step ?? 'idle'} className="cl-float-up mt-1 text-xl font-semibold leading-snug text-white 2xl:text-2xl">
                   {run && !stale
                     ? sentence
                     : phase === 'running'

@@ -89,7 +89,7 @@ print(average(scores))
 `;
 
 // ---------------------------------------------------------------- kids view (default for new visitors)
-const says = () => page.locator('#robot-says + p').innerText();
+const says = () => page.locator('#robo-sentence').innerText();
 await page.goto(`${BASE}/`);
 await page.evaluate(() => localStorage.clear());
 await page.reload();
@@ -123,7 +123,7 @@ await check('kids: hover a line or word to see what it means', async () => {
 });
 await check('kids: explain every line before running', async () => {
   await page.getByRole('button', { name: /Explain every line/ }).click();
-  await page.locator('.cl-line-note', { hasText: 'Put 30 into the temperature box.' }).first().waitFor();
+  await page.locator('.cl-line-note', { hasText: 'Put 30 into' }).first().waitFor();
   await page.getByRole('button', { name: /Hide line notes/ }).click();
 });
 await page.screenshot({ path: `${OUT}/0-kids-plan.png` });

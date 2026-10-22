@@ -101,25 +101,25 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
     if (failLine) {
       decos.push({
         range: range(failLine),
+        options: { isWholeLine: true, className: 'cl-fail-line', overviewRuler: { color: '#f97316', position: monaco.editor.OverviewRulerLane.Full } },
+      });
+      // The glyph sits on a collapsed range so a wrapped line shows it once, not on every row.
+      decos.push({
+        range: range(failLine),
         options: {
-          isWholeLine: true,
-          className: 'cl-fail-line',
           glyphMarginClassName: game ? 'cl-boom-glyph' : failLine === activeLine ? 'cl-step-fail-glyph' : 'cl-fail-glyph',
           glyphMarginHoverMessage: { value: 'Exception raised here' },
-          overviewRuler: { color: '#f97316', position: monaco.editor.OverviewRulerLane.Full },
         },
       });
     }
     if (activeLine && activeLine !== failLine) {
       decos.push({
         range: range(activeLine),
-        options: {
-          isWholeLine: true,
-          className: 'cl-step-line',
-          glyphMarginClassName: game ? 'cl-robot-glyph' : 'cl-step-glyph',
-          glyphMarginHoverMessage: { value: 'Current step' },
-          overviewRuler: { color: '#3b82f6', position: monaco.editor.OverviewRulerLane.Full },
-        },
+        options: { isWholeLine: true, className: 'cl-step-line', overviewRuler: { color: '#3b82f6', position: monaco.editor.OverviewRulerLane.Full } },
+      });
+      decos.push({
+        range: range(activeLine),
+        options: { glyphMarginClassName: game ? 'cl-robot-glyph' : 'cl-step-glyph', glyphMarginHoverMessage: { value: 'Current step' } },
       });
     } else if (activeLine && activeLine === failLine) {
       decos.push({ range: range(activeLine), options: { isWholeLine: true, className: 'cl-step-line' } });
@@ -158,6 +158,9 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
         renderLineHighlight: 'none',
         readOnly: !!onLineClick, // predict mode: clicks pick a line instead of editing
         hover: { delay: 250 },
+        // Kids and Game views: wrap long lines instead of hiding them off the edge, and no pinned header lines.
+        wordWrap: game ? 'on' : 'off',
+        stickyScroll: { enabled: !game },
       }}
     />
   );
