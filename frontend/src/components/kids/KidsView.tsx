@@ -16,6 +16,21 @@ import { KidBoard } from './KidBoard';
 const KidsBlocks = lazy(() => import('./KidsBlocks').then((m) => ({ default: m.KidsBlocks })));
 
 const READ_ALOUD_KEY = 'codelens.kids.read-aloud';
+const PACE_KEY = 'codelens.kids.pace';
+
+/** How Robo moves through the steps: on its own at some speed, or only when the child presses Next. */
+type Pace = 'slow' | 'normal' | 'fast' | 'manual';
+// Milliseconds to wait on each step: [when not reading aloud, after the sentence has been read aloud].
+const PACE_DELAY: Record<Exclude<Pace, 'manual'>, [number, number]> = { slow: [4000, 1500], normal: [2500, 600], fast: [1100, 150] };
+
+function loadPace(): Pace {
+  try {
+    const saved = localStorage.getItem(PACE_KEY);
+    return saved === 'slow' || saved === 'fast' || saved === 'manual' ? saved : 'normal';
+  } catch {
+    return 'normal';
+  }
+}
 
 function loadReadAloud(): boolean {
   try {
@@ -29,6 +44,7 @@ function loadReadAloud(): boolean {
 export function KidsView({ dbg }: { dbg: Debugger }) {
   const { run, step, stale, total, phase } = dbg;
   const [readAloud, setReadAloud] = useState(loadReadAloud);
+  const [pace, setPace] = useState(loadPace);
   const [playing, setPlaying] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   const [explainAll, setExplainAll] = useState(false);
@@ -123,6 +139,15 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
 
   useEffect(() => {
     try {
+      localStorage.setItem(PACE_KEY, pace);
+    } catch {
+      /* ignore */
+    }
+    if (pace === 'manual') setPlaying(false);
+  }, [pace]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem(READ_ALOUD_KEY, readAloud ? 'on' : 'off');
     } catch {
       /* ignore */
@@ -140,7 +165,10 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
         setPlaying(false);
         return;
       }
-      timer.current = window.setTimeout(() => dbg.goTo(step + 1), readAloud ? 500 : 2600);
+      const [quiet, afterSpeech] = PACE_DELAY[pace === 'manual' ? 'normal' : pace];
+      // Linger on a new idea card so there is time to read it.
+      const linger = concept ? 2500 : 0;
+      timer.current = window.setTimeout(() => dbg.goTo(step + 1), (readAloud && speechSupported ? afterSpeech : quiet) + linger);
     };
     if (readAloud && speechSupported) speak(sentence, advance);
     else advance();
@@ -148,7 +176,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
       if (timer.current) window.clearTimeout(timer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event?.step, run, playing, readAloud]);
+  }, [event?.step, run, playing, readAloud, pace]);
 
   useEffect(() => () => stopSpeaking(), []);
 
@@ -156,6 +184,14 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     setPlaying(false);
     stopSpeaking();
     await dbg.execute();
+    // Robo walks through the program by itself unless the child chose to press Next each time.
+    setPlaying(pace !== 'manual');
+  };
+
+  // Taking a step by hand pauses the automatic walk-through.
+  const stepBy = (move: () => void) => {
+    setPlaying(false);
+    move();
   };
 
   const bigButton = 'inline-flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-base font-bold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-40 2xl:px-4 2xl:py-2 2xl:text-lg';
@@ -195,12 +231,12 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
         <button className={`${bigButton} border-emerald-400 bg-emerald-600 hover:bg-emerald-500`} onClick={start} disabled={phase === 'running'}>
           {phase === 'running' ? '⏳ Getting ready…' : '▶ Start'}
         </button>
-        <button className={`${bigButton} border-slate-500 bg-slate-800 hover:bg-slate-700`} onClick={dbg.prev} disabled={!run || stale || step === 0} aria-keyshortcuts="Shift+F10">
+        <button className={`${bigButton} border-slate-500 bg-slate-800 hover:bg-slate-700`} onClick={() => stepBy(dbg.prev)} disabled={!run || stale || step === 0} aria-keyshortcuts="Shift+F10">
           ⬅ Back
         </button>
         <button
           className={`${bigButton} border-sky-300 bg-sky-600 hover:bg-sky-500 2xl:text-xl`}
-          onClick={dbg.next}
+          onClick={() => stepBy(dbg.next)}
           disabled={!run || stale || step >= total - 1}
           aria-keyshortcuts="F10"
         >
@@ -215,9 +251,21 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
           disabled={!run || stale || total < 2}
           aria-pressed={playing}
         >
-          {playing ? '⏸ Stop' : '🐢 Play slowly'}
+          {playing ? '⏸ Pause' : '🎬 Play'}
         </button>
-        <button className={`${bigButton} border-slate-500 bg-slate-800 hover:bg-slate-700`} onClick={() => dbg.goTo(0)} disabled={!run || stale || step === 0}>
+        <select
+          className="input py-1.5 text-base"
+          value={pace}
+          onChange={(e) => setPace(e.target.value as Pace)}
+          aria-label="How fast Robo goes"
+          title="How fast Robo goes through the steps"
+        >
+          <option value="slow">🐢 Slow</option>
+          <option value="normal">🚶 Normal</option>
+          <option value="fast">🐇 Fast</option>
+          <option value="manual">✋ I press Next</option>
+        </select>
+        <button className={`${bigButton} border-slate-500 bg-slate-800 hover:bg-slate-700`} onClick={() => stepBy(() => dbg.goTo(0))} disabled={!run || stale || step === 0}>
           🔁 From the start
         </button>
         <button
@@ -448,7 +496,9 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
                       : 'Hi! I\'m Robo. Pick a program, then press ▶ Start. I\'ll follow the code one line at a time and tell you what happens.'}
                 </p>
                 {run && !stale && step === 0 && total > 1 && (
-                  <p className="mt-2 text-base text-sky-200">Press the blue “Next step ➡” button to see what happens next.</p>
+                  <p className="mt-2 text-base text-sky-200">
+                    {playing ? 'Robo will move on by itself. Press ⏸ Pause any time to stop and look.' : 'Press the blue “Next step ➡” button to see what happens next.'}
+                  </p>
                 )}
                 {success && <p className="mt-2 text-lg text-emerald-200">🎉 You followed the whole program! Pick another one, or change the code and press ▶ Start.</p>}
                 {run && !stale && run.summary.error && (

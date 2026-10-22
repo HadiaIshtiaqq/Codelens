@@ -54,6 +54,7 @@ async function load(source, mode = 'game') {
   await page.evaluate((m) => {
     localStorage.clear();
     localStorage.setItem('codelens.view-mode', m);
+    localStorage.setItem('codelens.kids.pace', 'manual'); // checks step by hand unless they test auto-play
   }, mode);
   await page.goto(`${BASE}/#code=${enc}`);
   await page.reload();
@@ -91,7 +92,10 @@ print(average(scores))
 // ---------------------------------------------------------------- kids view (default for new visitors)
 const says = () => page.locator('#robo-sentence').innerText();
 await page.goto(`${BASE}/`);
-await page.evaluate(() => localStorage.clear());
+await page.evaluate(() => {
+  localStorage.clear();
+  localStorage.setItem('codelens.kids.pace', 'manual');
+});
 await page.reload();
 await check('kids view is the default', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Kids' }).waitFor({ timeout: 30000 }));
 await check('kids: plain-word steps, idea cards, boxes', async () => {
@@ -137,6 +141,17 @@ await check('kids: reads aloud using the name Robo', async () => {
   if (!said.some((t) => t.startsWith("Hi, I'm Robo!"))) throw new Error(JSON.stringify(said.slice(-3)));
   if (said.some((t) => /the robot/i.test(t))) throw new Error('still says "the robot"');
   await page.getByRole('checkbox', { name: /Read aloud/ }).uncheck();
+});
+await check('kids: Start plays the steps by itself', async () => {
+  await page.getByLabel('Pick a program').selectOption('pets');
+  await page.getByLabel('How fast Robo goes').selectOption('fast');
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/Step 3 of \d+/).waitFor({ timeout: 30000 }); // no Next presses
+  await page.getByRole('button', { name: /Pause/ }).click();
+  const paused = await page.getByText(/Step \d+ of \d+/).first().innerText();
+  await page.waitForTimeout(2000);
+  if ((await page.getByText(/Step \d+ of \d+/).first().innerText()) !== paused) throw new Error('kept going after Pause');
+  await page.getByLabel('How fast Robo goes').selectOption('manual');
 });
 await check('kids: gentle oops', async () => {
   await page.getByLabel('Pick a program').selectOption('bug');
