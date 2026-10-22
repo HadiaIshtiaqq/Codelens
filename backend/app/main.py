@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from app.config import PROJECT_DIR, get_settings
-from app.routers import analysis, convert, executions, rea
+from app.routers import analysis, convert, executions, explain, rea
 from app.services.access import AccessCodeMiddleware
 from app.services.llm import select_provider
 from app.services.ratelimit import RateLimiter, RateLimitMiddleware
@@ -84,6 +84,7 @@ app.add_middleware(
 app.include_router(executions.router)
 app.include_router(analysis.router)
 app.include_router(convert.router)
+app.include_router(explain.router)
 app.include_router(rea.router)
 
 
