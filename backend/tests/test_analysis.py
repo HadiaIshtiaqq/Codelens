@@ -154,9 +154,14 @@ def _mock_llm(app, handler):
 
 
 @pytest.fixture
-def llm_app(client):
+def llm_app(client, monkeypatch):
+    import app.services.llm as llm
     from app.main import app
 
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setattr(llm.asyncio, "sleep", no_wait)  # retries for a busy AI happen instantly in tests
     saved = app.state.llm_provider
     yield app
     app.state.llm_provider = saved
@@ -370,3 +375,17 @@ def test_autopilot_falls_back_to_the_plan_when_the_ai_fails(client, llm_app):
     _mock_llm(llm_app, lambda request: httpx.Response(500, text="down"))
     body = client.post("/api/v1/agent", json={"source_code": BROKEN_TOTAL}).json()
     assert body["source"] == "planner" and body["patch"]["status"] == "validated"
+
+
+def test_a_busy_ai_is_retried_before_giving_up(client, llm_app, monkeypatch):
+    import app.services.llm as llm
+
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setattr(llm.asyncio, "sleep", no_wait)
+    answers = iter([httpx.Response(503, text="high demand"), httpx.Response(429, text="slow down"),
+                    _reply({"speech": "Line 2 prints the name.", "line": 2})])
+    _mock_llm(llm_app, lambda request: next(answers))
+    body = client.post("/api/v1/ask", json={"source_code": "name = 'Mia'\nprint(name)\n", "question": "what prints the name?"}).json()
+    assert body["source"] == "ai" and body["speech"] == "Line 2 prints the name." and body["line"] == 2

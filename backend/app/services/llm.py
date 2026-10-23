@@ -6,6 +6,7 @@ transport, HTTP or schema failure raises LLMError so callers can degrade to the
 offline engine.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -185,6 +186,25 @@ class LLMClient:
             self.provider.model = chosen
         return self.provider.model
 
+    async def _post_chat(self, body: dict[str, Any]) -> httpx.Response:
+        """POST /chat/completions, retrying a few times when the provider is momentarily busy (429/500/503)."""
+        p = self.provider
+        delay = 1.0
+        for attempt in range(4):
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(self.timeout, connect=10.0), transport=self.transport
+                ) as client:
+                    resp = await client.post(f"{p.base_url}/chat/completions", headers=self._headers(), json=body)
+            except httpx.HTTPError as exc:
+                raise LLMError(f"{p.name} request failed: {type(exc).__name__}: {exc}") from exc
+            if resp.status_code not in (429, 500, 502, 503) or attempt == 3:
+                return resp
+            log.info("%s busy (HTTP %s); retrying in %.0f s", p.name, resp.status_code, delay)
+            await asyncio.sleep(delay)
+            delay *= 2
+        return resp
+
     async def _chat_json(self, user_content: str, system: str = SYSTEM_PROMPT, max_tokens: int = 4096) -> dict[str, Any]:
         p = self.provider
         model = await self.ensure_model()
@@ -198,13 +218,7 @@ class LLMClient:
                 {"role": "user", "content": user_content},
             ],
         }
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout, connect=10.0), transport=self.transport
-            ) as client:
-                resp = await client.post(f"{p.base_url}/chat/completions", headers=self._headers(), json=body)
-        except httpx.HTTPError as exc:
-            raise LLMError(f"{p.name} request failed: {type(exc).__name__}: {exc}") from exc
+        resp = await self._post_chat(body)
         if resp.status_code != 200:
             raise LLMError(f"{p.name} returned HTTP {resp.status_code}: {resp.text[:300]}")
         try:
@@ -218,13 +232,7 @@ class LLMClient:
         p = self.provider
         body = {"model": await self.ensure_model(), "temperature": 0.1, "max_tokens": 2048,
                 "messages": messages, "tools": tools, "tool_choice": "auto"}
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout, connect=10.0), transport=self.transport
-            ) as client:
-                resp = await client.post(f"{p.base_url}/chat/completions", headers=self._headers(), json=body)
-        except httpx.HTTPError as exc:
-            raise LLMError(f"{p.name} request failed: {type(exc).__name__}: {exc}") from exc
+        resp = await self._post_chat(body)
         if resp.status_code != 200:
             raise LLMError(f"{p.name} returned HTTP {resp.status_code}: {resp.text[:300]}")
         try:
