@@ -1,6 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ExecutionResponse, HeapObject, TraceEvent, VizFrame, VizSnapshot, VizValue } from '../../api/types';
 import { aliasesOf, describeViz, heapOrder, isRef } from '../../lib/viz';
+import { CardsBoard } from './CardsBoard';
+
+export type BoardView = 'cards' | 'arrows';
 
 interface Props {
   viz: VizSnapshot | null;
@@ -10,6 +13,10 @@ interface Props {
   onExplain: () => void;
   onFix: () => void;
   onReplay: () => void;
+  /** Cards: each variable written out (easy to read). Arrows: the full picture of objects and references. */
+  view: BoardView;
+  onView: (view: BoardView) => void;
+  changed: Set<string>;
 }
 
 interface Arrow {
@@ -241,7 +248,7 @@ function Confetti() {
 }
 
 /** Python-Tutor-style frames & objects view, presented as a game board. */
-export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay }: Props) {
+export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay, view, onView, changed }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [arrows, setArrows] = useState<Arrow[]>([]);
@@ -293,7 +300,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
     const ro = new ResizeObserver(draw);
     ro.observe(content);
     return () => ro.disconnect();
-  }, [viz, order, activeFrameId, scale]);
+  }, [viz, order, activeFrameId, scale, view]);
 
   // Scale the board to fit the panel (never larger than 1:1, and not so small it can't be read).
   useLayoutEffect(() => {
@@ -310,7 +317,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
     ro.observe(viewport);
     ro.observe(content);
     return () => ro.disconnect();
-  }, [fit, viz]);
+  }, [fit, viz, view]);
 
   if (!viz && summary && (summary.error || summary.status !== 'completed')) {
     return (
@@ -358,94 +365,124 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
   const won = summary?.status === 'completed' && !summary.error;
 
   return (
-    <div ref={viewportRef} className={`cl-stage-bg relative h-full overflow-auto ${crashedHere ? 'cl-shake-soft' : ''}`}>
-      <button
-        className="sticky top-2 z-20 ml-auto mr-2 mt-2 block w-fit rounded-md border border-slate-600 bg-slate-900/90 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800"
-        onClick={() => setFit(!fit)}
-        title={fit ? 'Show the board at full size (scroll to see all of it)' : 'Shrink the board so all of it fits'}
-      >
-        {fit ? (scale < 1 ? `🔍 ${Math.round(scale * 100)}% · full size` : '🔍 full size') : '🔍 Fit to screen'}
-      </button>
+    <div className={`cl-stage-bg relative flex h-full flex-col ${crashedHere ? 'cl-shake-soft' : ''}`}>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800/80 bg-slate-950/50 px-3 py-1.5">
+        <div role="radiogroup" aria-label="Board style" className="flex overflow-hidden rounded-md border border-slate-700 text-xs">
+          {(
+            [
+              ['cards', '🃏 Cards'],
+              ['arrows', '🔗 Arrows'],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              role="radio"
+              aria-checked={view === v}
+              onClick={() => onView(v)}
+              className={`px-2.5 py-1 font-semibold ${view === v ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
+              title={v === 'cards' ? 'Each variable on a card with its value written out' : 'Objects as boxes, with arrows from the variables that point at them'}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {view === 'arrows' && (
+          <button
+            className="ml-auto rounded-md border border-slate-600 bg-slate-900/90 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800"
+            onClick={() => setFit(!fit)}
+            title={fit ? 'Show the board at full size (scroll to see all of it)' : 'Shrink the board so all of it fits'}
+          >
+            {fit ? (scale < 1 ? `🔍 ${Math.round(scale * 100)}% · full size` : '🔍 full size') : '🔍 Fit to screen'}
+          </button>
+        )}
+      </div>
       {crashedHere && event.event === 'exception' && (
-        <div className="cl-pop sticky top-0 z-20 mx-auto w-fit rounded-b-xl bg-orange-600 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
+        <div className="cl-pop mx-auto mt-2 w-fit shrink-0 rounded-xl bg-orange-600 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
           💥 {event.exception.type}: {event.exception.message} — line {event.line}
         </div>
       )}
       {event?.event === 'stdout' && (
-        <div className="cl-bubble absolute left-4 top-3 z-20 max-w-[60%] rounded-2xl rounded-bl-none border border-violet-400 bg-violet-950 px-3 py-1.5 font-mono text-sm text-violet-100 shadow-lg">
+        // Cards fill the top of the board, so the speech bubble goes at the bottom there.
+        <div
+          className={`cl-bubble absolute left-4 z-20 max-w-[60%] rounded-2xl rounded-bl-none border border-violet-400 bg-violet-950 px-3 py-1.5 font-mono text-sm text-violet-100 shadow-lg ${view === 'cards' ? 'bottom-4' : 'top-12'}`}
+        >
           💬 {event.stdout_chunk.trimEnd() || '(blank line)'}
         </div>
       )}
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto">
+        <p className="sr-only" aria-live="polite">
+          {describeViz(viz)}
+        </p>
+        {view === 'cards' && <CardsBoard viz={viz} changed={changed} />}
+        {/* Narrow screens stack frames above objects; arrows are recomputed from the layout either way.
+            The sizer takes the scaled size so the panel only scrolls when the board really is bigger. */}
+        {view === 'arrows' && (
+          <div style={{ width: size.w * scale || undefined, height: size.h * scale || undefined }}>
+            <div
+              ref={contentRef}
+              aria-hidden
+              className="relative flex w-max flex-col items-start gap-10 p-4 pt-12 sm:flex-row sm:gap-24 sm:p-5 sm:pt-12"
+              style={{ transform: scale < 1 ? `scale(${scale})` : undefined, transformOrigin: '0 0' }}
+            >
+              <section aria-label="Call stack frames" className="flex w-full max-w-[300px] shrink-0 flex-col gap-3 sm:w-[300px]">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Frames · where the robot is</h3>
+                {viz.hidden_frames > 0 && (
+                  <div className="rounded-lg border border-dashed border-slate-600 px-2 py-1 text-center text-xs text-slate-400">
+                    ⋯ {viz.hidden_frames} older frames
+                  </div>
+                )}
+                {viz.stack.map((f) => (
+                  <FrameCard key={f.id} frame={f} active={f.id === activeFrameId} event={event} />
+                ))}
+              </section>
 
-      <p className="sr-only" aria-live="polite">
-        {describeViz(viz)}
-      </p>
-      {/* Narrow screens stack frames above objects; arrows are recomputed from the layout either way.
-          The sizer takes the scaled size so the panel only scrolls when the board really is bigger. */}
-      <div className="-mt-8" style={{ width: size.w * scale || undefined, height: size.h * scale || undefined }}>
-      <div
-        ref={contentRef}
-        aria-hidden
-        className="relative flex w-max flex-col items-start gap-10 p-4 pt-12 sm:flex-row sm:gap-24 sm:p-5 sm:pt-12"
-        style={{ transform: scale < 1 ? `scale(${scale})` : undefined, transformOrigin: '0 0' }}
-      >
-        <section aria-label="Call stack frames" className="flex w-full max-w-[300px] shrink-0 flex-col gap-3 sm:w-[300px]">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Frames · where the robot is</h3>
-          {viz.hidden_frames > 0 && (
-            <div className="rounded-lg border border-dashed border-slate-600 px-2 py-1 text-center text-xs text-slate-400">
-              ⋯ {viz.hidden_frames} older frames
+              <section aria-label="Objects" className="flex min-w-[240px] flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Objects · what they point at</h3>
+                  <label className="flex items-center gap-1 text-[11px] text-slate-400">
+                    <input type="checkbox" checked={hideCallables} onChange={(e) => setHideCallables(e.target.checked)} />
+                    hide functions
+                  </label>
+                </div>
+                {order.length === 0 && <p className="text-xs italic text-slate-500">No objects yet: only simple values so far.</p>}
+                {/* Many objects go into a few columns, so the board stays wide and short enough to see at once. */}
+                <div
+                  className="grid items-start gap-4"
+                  style={{ gridTemplateColumns: `repeat(${order.length > 6 ? Math.min(4, Math.ceil(Math.sqrt(order.length / 2))) : 1}, max-content)` }}
+                >
+                  {order.map((id) => (
+                    <HeapCard key={id} id={id} obj={viz.heap[id]} viz={viz} />
+                  ))}
+                </div>
+              </section>
+
+              <svg className="pointer-events-none absolute left-0 top-0" width={size.w} height={size.h} aria-hidden>
+                <defs>
+                  <marker id="cl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#60a5fa" />
+                  </marker>
+                  <marker id="cl-arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
+                  </marker>
+                </defs>
+                {arrows
+                  .filter((a) => visible.has(a.key.split('->')[1]))
+                  .map((a) => (
+                    <path
+                      key={a.key + a.d.length}
+                      d={a.d}
+                      pathLength={1}
+                      fill="none"
+                      stroke={a.active ? '#60a5fa' : '#475569'}
+                      strokeWidth={a.active ? 2.2 : 1.6}
+                      markerEnd={`url(#${a.active ? 'cl-arrow' : 'cl-arrow-dim'})`}
+                      className="cl-draw"
+                    />
+                  ))}
+              </svg>
             </div>
-          )}
-          {viz.stack.map((f) => (
-            <FrameCard key={f.id} frame={f} active={f.id === activeFrameId} event={event} />
-          ))}
-        </section>
-
-        <section aria-label="Objects" className="flex min-w-[240px] flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Objects · what they point at</h3>
-            <label className="flex items-center gap-1 text-[11px] text-slate-400">
-              <input type="checkbox" checked={hideCallables} onChange={(e) => setHideCallables(e.target.checked)} />
-              hide functions
-            </label>
           </div>
-          {order.length === 0 && <p className="text-xs italic text-slate-500">No objects yet: only simple values so far.</p>}
-          {/* Many objects go into a few columns, so the board stays wide and short enough to see at once. */}
-          <div
-            className="grid items-start gap-4"
-            style={{ gridTemplateColumns: `repeat(${order.length > 6 ? Math.min(4, Math.ceil(Math.sqrt(order.length / 2))) : 1}, max-content)` }}
-          >
-            {order.map((id) => (
-              <HeapCard key={id} id={id} obj={viz.heap[id]} viz={viz} />
-            ))}
-          </div>
-        </section>
-
-        <svg className="pointer-events-none absolute left-0 top-0" width={size.w} height={size.h} aria-hidden>
-          <defs>
-            <marker id="cl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#60a5fa" />
-            </marker>
-            <marker id="cl-arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
-            </marker>
-          </defs>
-          {arrows
-            .filter((a) => visible.has(a.key.split('->')[1]))
-            .map((a) => (
-              <path
-                key={a.key + a.d.length}
-                d={a.d}
-                pathLength={1}
-                fill="none"
-                stroke={a.active ? '#60a5fa' : '#475569'}
-                strokeWidth={a.active ? 2.2 : 1.6}
-                markerEnd={`url(#${a.active ? 'cl-arrow' : 'cl-arrow-dim'})`}
-                className="cl-draw"
-              />
-            ))}
-        </svg>
-      </div>
+        )}
       </div>
 
       {endOverlay && (

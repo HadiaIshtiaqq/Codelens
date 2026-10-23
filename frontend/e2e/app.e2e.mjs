@@ -55,6 +55,7 @@ async function load(source, mode = 'game') {
     localStorage.clear();
     localStorage.setItem('codelens.view-mode', m);
     localStorage.setItem('codelens.kids.pace', 'manual'); // checks step by hand unless they test auto-play
+    localStorage.setItem('codelens.game.board', 'arrows'); // the arrow board checks; the cards board has its own
   }, mode);
   await page.goto(`${BASE}/#code=${enc}`);
   await page.reload();
@@ -63,7 +64,8 @@ async function load(source, mode = 'game') {
 
 const run = () => page.getByRole('button', { name: /Run Code/ }).click();
 const status = (text) => page.getByRole('status').filter({ hasText: text }).waitFor({ timeout: 30000 });
-const banner = () => page.getByText(/step \d+ · line \d+/).first().innerText();
+// The game view's badge above the board: "LINE 17", or "LINE 3 · geometry.py" in another file.
+const banner = async () => (await page.getByText(/^LINE \d+/).first().innerText()).toLowerCase();
 
 const PROGRAM = `class Node:
     def __init__(self, value):
@@ -217,14 +219,25 @@ await check('board: frames, objects, arrows, aliasing', async () => {
   if ((await page.locator('svg path.cl-draw').count()) < 3) throw new Error('too few arrows');
   await page.getByText(/shared by .*scores/).first().waitFor();
 });
+await check('game: cards board writes each variable out', async () => {
+  await page.getByRole('radio', { name: /Cards/ }).click();
+  const cards = page.getByTestId('cards-board');
+  await cards.getByText(/Inside average\(\)/).waitFor();
+  await cards.locator('[data-var="xs"]').waitFor();
+  await cards.locator('[data-var="xs"]').getByText(/same object as scores/).waitFor(); // aliasing across frames
+  await page.getByRole('radio', { name: /Arrows/ }).click();
+  await page.getByText('Frames · where the robot is').waitFor();
+});
 await check('screen-reader description of the board', async () => {
   const text = await page.locator('p.sr-only').first().innerText();
   if (!text.includes('average') || !text.includes('the same object as')) throw new Error(text);
 });
-await check('one-line explanation beside the active line', async () => {
-  await page.locator('.cl-inline-note').first().waitFor();
+await check('one-line explanation beside the board, and beside the line in Classic', async () => {
   const note = await page.locator('p', { hasText: /^🗣 / }).first().innerText();
   if (!note.includes('Crash!')) throw new Error(note);
+  await page.getByRole('radio', { name: /Classic/ }).click();
+  await page.locator('.cl-inline-note').first().waitFor();
+  await page.getByRole('radio', { name: /Game/ }).click();
 });
 await page.screenshot({ path: `${OUT}/1-crash.png` });
 await check('game: read aloud speaks each step', async () => {
@@ -305,7 +318,7 @@ await check('multi-file project: the robot follows into the module', async () =>
   await page.getByRole('tab', { name: 'Full stdout' }).click();
   await page.getByRole('log').filter({ hasText: '12' }).first().waitFor();
   for (let i = 0; i < 30 && !(await banner()).includes('geometry.py'); i++) await page.keyboard.press('F10');
-  if (!(await banner()).includes('of geometry.py')) throw new Error(await banner());
+  if (!(await banner()).includes('· geometry.py')) throw new Error(await banner());
   await page.locator('[role="tab"][aria-selected="true"]', { hasText: 'geometry.py' }).waitFor();
 });
 await page.screenshot({ path: `${OUT}/2-multifile.png` });
@@ -329,8 +342,8 @@ await check('game: a big board shrinks to fit the panel', async () => {
   await page.getByRole('button', { name: /\d+% · full size/ }).waitFor();
   const overflow = () =>
     page.getByText('Frames · where the robot is').evaluate((el) => {
-      const v = el.closest('.cl-stage-bg');
-      return v.scrollHeight - v.clientHeight;
+      const v = el.closest('.overflow-auto'); // the board's scrolling area
+      return Math.max(v.scrollHeight - v.clientHeight, v.scrollWidth - v.clientWidth);
     });
   if ((await overflow()) > 2) throw new Error(`board still scrolls by ${await overflow()}px`);
   await page.getByRole('button', { name: /full size/ }).click();

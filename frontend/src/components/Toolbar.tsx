@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type { Debugger } from '../hooks/useDebugger';
 import { EXAMPLES } from '../lib/examples';
 import { SAFE_URL_LENGTH, shareUrl } from '../lib/share';
@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { StatusBadge } from './StatusBadge';
 
 /** Header toolbar (spec §4.1) with keyboard shortcuts (spec §1.4 accessibility). */
-export function Toolbar({ dbg }: { dbg: Debugger }) {
+export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }) {
   const [shareNote, setShareNote] = useState<string | null>(null);
   const { phase, step, total, run, stale } = dbg;
   const running = phase === 'running';
@@ -40,6 +40,7 @@ export function Toolbar({ dbg }: { dbg: Debugger }) {
 
   return (
     <div role="toolbar" aria-label="Execution controls" className="flex flex-wrap items-center gap-2 px-3 py-2">
+      {leading}
       <label className="sr-only" htmlFor="example">
         Load example
       </label>
@@ -72,7 +73,7 @@ export function Toolbar({ dbg }: { dbg: Debugger }) {
         </button>
       ) : (
         <button className="btn btn-primary" onClick={dbg.execute} aria-keyshortcuts="Control+Enter">
-          ▶ Run Code <span className="kbd">Ctrl+↵</span>
+          ▶ Run Code <span className="kbd hidden 2xl:inline">Ctrl+↵</span>
         </button>
       )}
 

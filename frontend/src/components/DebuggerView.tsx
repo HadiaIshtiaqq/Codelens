@@ -11,7 +11,7 @@ import { CodeEditor } from './CodeEditor';
 import { ConsolePanel } from './ConsolePanel';
 import { FileTabs } from './FileTabs';
 import { GameHUD, Toasts } from './game/GameHUD';
-import { Stage } from './game/Stage';
+import { Stage, type BoardView } from './game/Stage';
 import { ProgramInput } from './ProgramInput';
 import { Timeline } from './Timeline';
 import { Toolbar } from './Toolbar';
@@ -23,6 +23,15 @@ const AIPanel = lazy(() => import('./AIPanel').then((m) => ({ default: m.AIPanel
 
 type Mode = 'game' | 'classic' | 'kids';
 const MODE_KEY = 'codelens.view-mode';
+const BOARD_KEY = 'codelens.game.board';
+
+function loadBoard(): BoardView {
+  try {
+    return localStorage.getItem(BOARD_KEY) === 'arrows' ? 'arrows' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
 
 function loadMode(): Mode {
   try {
@@ -47,6 +56,15 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const [explainAll, setExplainAll] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [simpleWords, setSimpleWords] = useState(true);
+  const [board, setBoard] = useState<BoardView>(loadBoard);
+  const chooseBoard = (view: BoardView) => {
+    setBoard(view);
+    try {
+      localStorage.setItem(BOARD_KEY, view);
+    } catch {
+      /* ignore */
+    }
+  };
   // Plan + line notes for the file in the editor, built from the code itself (works before running).
   const plan = useCodeExplanation(dbg.editorValue, simpleWords ? 'kid' : 'standard');
   const game = useGame(dbg);
@@ -176,7 +194,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
           revealRequest={reveal}
           variant={variant}
           onLineClick={variant === 'game' && game.awaitingGuess ? game.guess : null}
-          inlineNote={activeLine ? narration : null}
+          inlineNote={activeLine && variant === 'classic' ? narration : null}
           lineNotes={notes}
           breakpoints={dbg.breakpointLines(activeFile)}
           onToggleBreakpoint={dbg.toggleBreakpoint}
@@ -196,6 +214,17 @@ export function DebuggerView({ dbg, onConvert }: Props) {
     </Suspense>
   );
 
+  const foreignBanner = foreign && run && (
+    <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-fuchsia-800 bg-fuchsia-950/70 px-3 py-2 text-sm">
+      <span>
+        🌍 This looks like <strong>{foreign}</strong>, not Python. The simulator runs Python, so convert it first.
+      </span>
+      <button className="btn btn-primary py-1" onClick={() => onConvert(run.source, foreign)}>
+        🔄 Convert to Python
+      </button>
+    </div>
+  );
+
   if (mode === 'kids') {
     return (
       <div className="flex h-full min-h-0 flex-col">
@@ -210,21 +239,95 @@ export function DebuggerView({ dbg, onConvert }: Props) {
     );
   }
 
+  if (mode === 'game') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="border-b border-slate-800 bg-slate-900/80">
+          <Toolbar dbg={controls} leading={modeSwitch} />
+        </div>
+        {foreignBanner}
+        <Toasts game={game} />
+        {/* Code on the left, the simulation on the right, side by side and the same size. Phones stack them. */}
+        <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 md:auto-rows-auto md:grid-cols-2 md:overflow-hidden">
+          <div className="flex flex-col gap-2 md:min-h-0">
+            <div className={`panel relative h-[60vh] flex-none overflow-hidden md:h-auto md:min-h-0 md:flex-1 ${game.awaitingGuess ? 'ring-2 ring-fuchsia-500' : ''}`}>
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/60 px-2 py-1">
+                <span className="mr-auto text-xs font-bold uppercase tracking-wide text-slate-400">📜 Code</span>
+                {explainAllToggle}
+                {planToggle}
+              </div>
+              {game.awaitingGuess && (
+                <div className="cl-pop absolute inset-x-2 top-20 z-10 rounded-lg bg-fuchsia-700 px-3 py-2 text-center text-sm font-bold shadow-lg">
+                  🎯 Where will the robot go next? Click a line! <span className="font-normal opacity-80">(Esc to cancel)</span>
+                </div>
+              )}
+              {editor('game')}
+            </div>
+            <ProgramInput dbg={dbg} />
+            <div className="h-[130px] shrink-0">{consolePanel}</div>
+          </div>
+
+          <div className="panel h-[85vh] overflow-hidden md:h-auto md:min-h-0">
+            <GameHUD dbg={dbg} game={game} />
+            <div className="min-h-[52px] shrink-0 border-b border-slate-800 bg-slate-950/80 px-3 py-2" aria-live="polite">
+              {event ? (
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 rounded-md bg-blue-600 px-2 py-0.5 font-mono text-xs font-bold">
+                    LINE {event.line}
+                    {eventFile !== MAIN_FILE && ` · ${eventFile}`}
+                  </span>
+                  <p key={event.step} className="cl-float-up text-base font-medium leading-snug text-yellow-100">
+                    {game.awaitingGuess ? '🎯 Make your guess first…' : `🗣 ${narration ?? ''}`}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">Press ▶ Run Code, then step through: the explanation for each line appears here.</p>
+              )}
+              {gapNote && <p className="mt-1 text-xs text-slate-400">{gapNote}</p>}
+            </div>
+            <div className="min-h-0 flex-1">
+              <Stage
+                viz={viz}
+                event={event}
+                summary={run && !stale ? run.summary : null}
+                isLast={!!run && !stale && step === events.length - 1}
+                onReplay={() => dbg.goTo(0)}
+                onExplain={() => {
+                  setAiOpen(true);
+                  dbg.explain(null, null);
+                }}
+                onFix={async () => {
+                  setAiOpen(true);
+                  await dbg.generatePatch();
+                }}
+                view={board}
+                onView={chooseBoard}
+                changed={changed}
+              />
+            </div>
+            <div className="shrink-0 border-t border-slate-800">
+              <button
+                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 hover:bg-slate-800"
+                onClick={() => setAiOpen(!aiOpen)}
+                aria-expanded={aiOpen}
+              >
+                <span>🧠 AI coach: explain · fix · test {dbg.patch ? `· patch ${dbg.patch.status}` : ''}</span>
+                <span>{aiOpen ? '▼' : '▲'}</span>
+              </button>
+              {aiOpen && <div className="h-[340px]">{aiPanel}</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-slate-800 bg-slate-900/80">
         <Toolbar dbg={controls} />
       </div>
-      {foreign && run && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-fuchsia-800 bg-fuchsia-950/70 px-3 py-2 text-sm">
-          <span>
-            🌍 This looks like <strong>{foreign}</strong>, not Python. The simulator runs Python, so convert it first.
-          </span>
-          <button className="btn btn-primary py-1" onClick={() => onConvert(run.source, foreign)}>
-            🔄 Convert to Python
-          </button>
-        </div>
-      )}
+      {foreignBanner}
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/40 px-3 py-1">
         {modeSwitch}
         {explainAllToggle}
@@ -232,85 +335,21 @@ export function DebuggerView({ dbg, onConvert }: Props) {
         {stepBanner}
       </div>
 
-      {mode === 'game' ? (
-        <>
-          <Toasts game={game} />
-          <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 lg:auto-rows-auto lg:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.6fr)] lg:overflow-hidden">
-            {/* Phones: each panel keeps its natural height and the page scrolls. Desktop: panels fill the screen. */}
-            <div className="flex flex-col gap-2 lg:min-h-0">
-              <div className={`panel relative h-[340px] flex-none overflow-hidden lg:h-auto lg:min-h-[300px] lg:flex-1 ${game.awaitingGuess ? 'ring-2 ring-fuchsia-500' : ''}`}>
-                {game.awaitingGuess && (
-                  <div className="cl-pop absolute inset-x-2 top-10 z-10 rounded-lg bg-fuchsia-700 px-3 py-2 text-center text-sm font-bold shadow-lg">
-                    🎯 Where will the robot go next? Click a line! <span className="font-normal opacity-80">(Esc to cancel)</span>
-                  </div>
-                )}
-                {editor('game')}
-              </div>
-              <ProgramInput dbg={dbg} />
-              <div className="h-[170px] shrink-0">{consolePanel}</div>
-            </div>
-
-            <div className="panel h-[560px] overflow-hidden lg:h-auto lg:min-h-[480px]">
-              <GameHUD dbg={dbg} game={game} />
-              {event && (
-                <div className="border-b border-slate-800 bg-slate-950/80 px-3 py-2" aria-live="polite">
-                  <div className="flex items-center gap-3">
-                    <span className="shrink-0 rounded-md bg-blue-600 px-2 py-0.5 font-mono text-xs font-bold">LINE {event.line}</span>
-                    <p key={event.step} className="cl-float-up truncate text-sm font-medium text-yellow-100" title={narration ?? ''}>
-                      {game.awaitingGuess ? '🎯 Make your guess first…' : `🗣 ${narration ?? ''}`}
-                    </p>
-                  </div>
-                  {gapNote && <p className="mt-1 text-xs text-slate-400">{gapNote}</p>}
-                </div>
-              )}
-              <div className="min-h-0 flex-1">
-                <Stage
-                  viz={viz}
-                  event={event}
-                  summary={run && !stale ? run.summary : null}
-                  isLast={!!run && !stale && step === events.length - 1}
-                  onReplay={() => dbg.goTo(0)}
-                  onExplain={() => {
-                    setAiOpen(true);
-                    dbg.explain(null, null);
-                  }}
-                  onFix={async () => {
-                    setAiOpen(true);
-                    await dbg.generatePatch();
-                  }}
-                />
-              </div>
-              <div className="border-t border-slate-800">
-                <button
-                  className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 hover:bg-slate-800"
-                  onClick={() => setAiOpen(!aiOpen)}
-                  aria-expanded={aiOpen}
-                >
-                  <span>🧠 AI coach: explain · fix · test {dbg.patch ? `· patch ${dbg.patch.status}` : ''}</span>
-                  <span>{aiOpen ? '▼' : '▲'}</span>
-                </button>
-                {aiOpen && <div className="h-[340px]">{aiPanel}</div>}
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 lg:auto-rows-auto lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1.2fr)_minmax(0,1fr)] lg:overflow-hidden">
-          <div className="flex min-h-[340px] flex-col gap-2">
-            <div className="panel min-h-0 flex-1 overflow-hidden">{editor('classic')}</div>
-            <ProgramInput dbg={dbg} />
-          </div>
-          <div className="grid min-h-[300px] grid-rows-[minmax(0,1.3fr)_minmax(0,0.7fr)] gap-2">
-            <VariableInspector event={event} changed={changed} />
-            <CallStack frames={stale ? [] : stack} onSelectLine={revealLine} />
-          </div>
-          <div className="grid min-h-[260px] grid-cols-1 gap-2 md:grid-cols-2">
-            <Timeline events={stale ? [] : events} step={step} onSelect={dbg.goTo} />
-            {consolePanel}
-          </div>
-          <div className="min-h-[300px]">{aiPanel}</div>
+      <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 lg:auto-rows-auto lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1.2fr)_minmax(0,1fr)] lg:overflow-hidden">
+        <div className="flex min-h-[340px] flex-col gap-2">
+          <div className="panel min-h-0 flex-1 overflow-hidden">{editor('classic')}</div>
+          <ProgramInput dbg={dbg} />
         </div>
-      )}
+        <div className="grid min-h-[300px] grid-rows-[minmax(0,1.3fr)_minmax(0,0.7fr)] gap-2">
+          <VariableInspector event={event} changed={changed} />
+          <CallStack frames={stale ? [] : stack} onSelectLine={revealLine} />
+        </div>
+        <div className="grid min-h-[260px] grid-cols-1 gap-2 md:grid-cols-2">
+          <Timeline events={stale ? [] : events} step={step} onSelect={dbg.goTo} />
+          {consolePanel}
+        </div>
+        <div className="min-h-[300px]">{aiPanel}</div>
+      </div>
     </div>
   );
 }

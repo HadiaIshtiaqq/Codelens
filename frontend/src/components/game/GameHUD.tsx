@@ -84,11 +84,12 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
   const canPlay = !!run && !dbg.stale && total > 1 && !game.predictMode;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 px-3 py-2">
+    // Compact so it stays on one row beside the code: small buttons, short labels.
+    <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 px-2 py-1.5 [&_.btn]:px-2 [&_.btn]:py-1 [&_.btn]:text-xs">
       {/* Playback */}
       <div className="flex items-center gap-1.5">
         <button
-          className={`btn ${playing ? 'btn-warn' : 'btn-primary'} min-w-[96px] justify-center`}
+          className={`btn ${playing ? 'btn-warn' : 'btn-primary'} min-w-[76px] justify-center`}
           disabled={!canPlay}
           onClick={() => {
             if (!playing) {
@@ -110,9 +111,9 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-1 text-[11px] text-slate-400">
+        <label className="flex items-center gap-1 text-[11px] text-slate-400" title="Stop autoplay when the program crashes">
           <input type="checkbox" checked={pauseOnCrash} onChange={(e) => setPauseOnCrash(e.target.checked)} />
-          pause on 💥
+          <span className="hidden 2xl:inline">pause on</span> 💥
         </label>
       </div>
 
@@ -128,7 +129,8 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
         }}
         title="Guess which line runs next before each step to earn XP"
       >
-        🎯 Predict mode {game.predictMode ? 'ON' : 'OFF'}
+        <span aria-hidden>🎯 Predict {game.predictMode ? 'ON' : 'OFF'}</span>
+        <span className="sr-only">Predict mode {game.predictMode ? 'ON' : 'OFF'}</span>
       </button>
       {game.streak > 0 && (
         <span className="cl-pop rounded-full bg-orange-600/80 px-2 py-0.5 text-xs font-bold" key={game.streak}>
@@ -139,7 +141,7 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
       {/* Level & XP */}
       <div className="ml-auto flex items-center gap-2" aria-label={`Level ${game.level}, ${game.xp} XP`}>
         <span className="rounded-md bg-yellow-500 px-2 py-0.5 text-xs font-black text-slate-900">LV {game.level}</span>
-        <div className="h-2.5 w-28 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-valuenow={Math.round(game.levelProgress * 100)} aria-valuemin={0} aria-valuemax={100}>
+        <div className="hidden h-2.5 w-20 overflow-hidden rounded-full bg-slate-800 2xl:block" role="progressbar" aria-valuenow={Math.round(game.levelProgress * 100)} aria-valuemin={0} aria-valuemax={100}>
           <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-500" style={{ width: `${game.levelProgress * 100}%` }} />
         </div>
         <span className="font-mono text-xs text-yellow-200">{game.xp} XP</span>
@@ -180,7 +182,8 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
           aria-pressed={readAloud}
           title={readAloud ? 'Reading each step aloud (click to stop)' : 'Read each step aloud'}
         >
-          🗣 {readAloud ? 'Reading aloud' : 'Read aloud'}
+          🗣 <span className="hidden 2xl:inline">{readAloud ? 'Reading aloud' : 'Read aloud'}</span>
+          <span className="sr-only 2xl:hidden">{readAloud ? 'Reading aloud' : 'Read aloud'}</span>
         </button>
       )}
       <button className="btn px-2" onClick={game.toggleSound} aria-pressed={game.sound} title={game.sound ? 'Sound effects on' : 'Sound effects off'}>
@@ -192,7 +195,7 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
 
 export function Toasts({ game }: { game: Game }) {
   return (
-    <div className="pointer-events-none fixed bottom-14 right-4 z-50 flex flex-col gap-2" aria-live="polite">
+    <div className="pointer-events-none fixed bottom-4 left-4 z-50 flex flex-col gap-2" aria-live="polite">
       {game.toasts.map((t) => (
         <div
           key={t.id}
