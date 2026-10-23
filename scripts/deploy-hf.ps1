@@ -73,8 +73,8 @@ if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 git -C $root archive --format=zip -o $zip HEAD
 Expand-Archive -Path $zip -DestinationPath $work
 Remove-Item $zip
-Copy-Item (Join-Path $root "deploy\huggingface\Dockerfile") (Join-Path $work "Dockerfile") -Force
-$readme = (Get-Content (Join-Path $root "deploy\huggingface\SPACE_HEADER.md") -Raw) + (Get-Content (Join-Path $work "README.md") -Raw)
+Copy-Item (Join-Path $root "deploy\hosted\Dockerfile") (Join-Path $work "Dockerfile") -Force
+$readme = (Get-Content (Join-Path $root "deploy\hosted\SPACE_HEADER.md") -Raw) + (Get-Content (Join-Path $work "README.md") -Raw)
 [IO.File]::WriteAllText((Join-Path $work "README.md"), $readme, (New-Object Text.UTF8Encoding $false))
 
 Push-Location $work

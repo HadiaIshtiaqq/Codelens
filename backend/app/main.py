@@ -1,6 +1,7 @@
 import asyncio
 import ctypes
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -134,6 +135,10 @@ class _McpEndpoint:
 
     def rebuild(self, settings) -> None:
         public = [h.strip() for h in settings.mcp_public_hosts.split(",") if h.strip()]
+        # Hosting services announce the app's own public host name: accept it without extra setup.
+        for env_name in ("RENDER_EXTERNAL_HOSTNAME", "SPACE_HOST"):
+            if os.getenv(env_name) and os.getenv(env_name) not in public:
+                public.append(os.environ[env_name])
         self.inner = mcp_server.http_app(None, public_hosts=public, path="/", local_browsers=True)
 
     async def __call__(self, scope, receive, send):

@@ -65,24 +65,21 @@ Every public option is locked with an **access code**, because visitors run code
 - **Judges:** send them a link that ends in `#access=<code>`. The code is saved and removed from the address bar.
 - **Alexa+ and other MCP clients:** they send the code as `Authorization: Bearer <code>` to `https://<host>/mcp`.
 
-### Option A: a free permanent link on Hugging Face Spaces (one command, opens on any computer)
+### Option A: a free permanent link on Render (opens on any computer)
 
-1. Create a free account at [huggingface.co](https://huggingface.co/join) (no card needed).
-2. Create a token: [Settings → Access Tokens](https://huggingface.co/settings/tokens) → **Create new token** → type **Write**.
-3. Commit your changes, then run:
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HadiaIshtiaqq/Codelens)
 
-```powershell
-.\scripts\deploy-hf.ps1        # asks for the token (hidden); deploys to <you>/codelens
-```
+1. Click the button. Sign in with GitHub, which is free and needs no card.
+2. Render reads [`render.yaml`](render.yaml) and asks for two values:
+   - `CODELENS_ACCESS_CODE`: for example `judges:pick-a-long-code`.
+   - `GEMINI_API_KEY`: optional; a free key from aistudio.google.com/apikey.
+3. Click **Apply**. The first build takes about 5–10 minutes. Your app is then at `https://<name>.onrender.com`, and judges open `https://<name>.onrender.com/#access=pick-a-long-code`.
 
-The script:
-1. Creates the Space.
-2. Stores your `GEMINI_API_KEY` (from `backend\.env`) and a new access code as encrypted Space secrets.
-3. Uploads the committed code, and prints the judges' link.
+Free Render apps sleep after 15 minutes without visitors, and the next visit takes about a minute to wake them. Every push to `main` redeploys automatically. Alexa+ / MCP clients use `https://<name>.onrender.com/mcp` with `Authorization: Bearer pick-a-long-code`.
 
-The Space builds for a few minutes and then stays on (it sleeps only after 48 hours without visitors). Run the script again after new commits to update it.
+Render can't start Docker containers, so programs run in the **subprocess sandbox** ([`deploy/hosted/Dockerfile`](deploy/hosted/Dockerfile)): a separate, memory-limited Python process with an empty environment. The server also makes itself non-dumpable, so user programs can't read its secrets through `/proc`. The access code keeps strangers out. For full container isolation, use option C.
 
-Hugging Face can't start Docker containers, so programs run in the **subprocess sandbox**: a separate, memory-limited Python process with an empty environment. The server also makes itself non-dumpable, so user programs can't read its secrets through `/proc`; a test checks this. The access code keeps strangers out. For full container isolation, use option C.
+(`scripts/deploy-hf.ps1` deploys the same image to Hugging Face Spaces, but Docker Spaces now need a PRO account there.)
 
 ### Option B: a public link from your own computer (one command)
 

@@ -1,0 +1,21 @@
+# Render blueprint: deploys CodeLens as one free web service.
+# One click: https://render.com/deploy?repo=https://github.com/HadiaIshtiaqq/Codelens
+# Render asks for the two secrets below while setting it up; they are never stored in the repo.
+services:
+  - type: web
+    name: codelens
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/hosted/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true # redeploys on every push to main
+    envVars:
+      - key: CODELENS_ACCESS_CODE # e.g. judges:pick-a-long-code ; judges open https://<app>.onrender.com/#access=pick-a-long-code
+        sync: false
+      - key: GEMINI_API_KEY # optional: free key from aistudio.google.com/apikey (empty = offline rules)
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      - key: CODELENS_LLM_TIMEOUT
+        value: "30"
