@@ -113,15 +113,17 @@ export default function App() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {locked && <AccessGate onUnlocked={() => setLocked(false)} />}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-800 bg-slate-950 px-4 py-2">
-        <h1 className="flex items-center gap-2 text-base font-bold tracking-tight">
-          <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden>
-            <circle cx="14" cy="14" r="9" fill="none" stroke="#3b82f6" strokeWidth="4" />
-            <path d="M21 21l7 7" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
-          </svg>
-          CodeLens AI
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-slate-950/70 px-4 py-2 backdrop-blur-xl">
+        <h1 className="group flex items-center gap-2 text-lg font-extrabold tracking-tight">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 via-sky-500 to-fuchsia-500 shadow-[0_0_18px_rgba(99,102,241,0.45)] transition group-hover:rotate-6">
+            <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden>
+              <circle cx="14" cy="14" r="9" fill="none" stroke="white" strokeWidth="4" />
+              <path d="M21 21l7 7" stroke="white" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span className="gradient-text">CodeLens AI</span>
         </h1>
-        <nav role="tablist" aria-label="Workspace" className="flex flex-wrap gap-1">
+        <nav role="tablist" aria-label="Workspace" className="flex flex-wrap gap-1 rounded-full border border-white/10 bg-slate-900/60 p-1">
           {tabs.map(([id, label]) => (
             <button key={id} role="tab" aria-selected={view === id} className="tab" onClick={() => setView(id)}>
               {label}
@@ -130,19 +132,20 @@ export default function App() {
         </nav>
         <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
           {healthError ? (
-            <span className="rounded bg-red-900 px-2 py-0.5 text-red-100" role="status">
+            <span className="chip border-red-500/50 bg-red-950/70 text-red-100" role="status">
               ✖ backend offline (start it with scripts\start.ps1)
             </span>
           ) : health ? (
             <>
               <span
-                className={`rounded px-2 py-0.5 ${health.sandbox === 'docker' ? 'bg-emerald-900 text-emerald-100' : 'bg-yellow-900 text-yellow-100'}`}
+                className={`chip ${health.sandbox === 'docker' ? 'border-emerald-500/40 bg-emerald-950/60 text-emerald-100' : 'border-yellow-500/40 bg-yellow-950/60 text-yellow-100'}`}
                 title={health.sandbox === 'docker' ? 'User code runs in locked-down containers' : 'Dev mode: no container isolation'}
               >
+                <span className={`cl-pulse-dot h-1.5 w-1.5 rounded-full ${health.sandbox === 'docker' ? 'bg-emerald-400 text-emerald-400/60' : 'bg-yellow-400 text-yellow-400/60'}`} />
                 sandbox: {health.sandbox}
               </span>
               <span
-                className={`rounded px-2 py-0.5 ${aiReady ? 'bg-emerald-900 text-emerald-100' : 'bg-slate-800 text-slate-300'}`}
+                className={`chip ${aiReady ? 'border-emerald-500/40 bg-emerald-950/60 text-emerald-100' : 'border-white/10 bg-slate-900/70 text-slate-300'}`}
                 title={aiReady ? health.llm_model || 'model is chosen on first use' : 'Add NEBIUS_API_KEY to backend\\.env and restart to turn the AI on'}
               >
                 {aiReady ? '🟢' : '⚪'} AI: {aiReady ? `${health.llm_provider}${health.llm_model ? ` · ${health.llm_model.split('/').pop()}` : ''}` : 'offline'}
@@ -153,7 +156,7 @@ export default function App() {
           )}
         </div>
       </header>
-      <div className="min-h-0 flex-1" hidden={view !== 'debugger'}>
+      <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'debugger'}>
         <DebuggerView
           dbg={dbg}
           onConvert={(code, language) => {
@@ -163,7 +166,7 @@ export default function App() {
         />
       </div>
       {visited.has('convert') && (
-        <div className="min-h-0 flex-1" hidden={view !== 'convert'}>
+        <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'convert'}>
           <Suspense fallback={loading}>
             <ConverterView
               aiReady={aiReady}
