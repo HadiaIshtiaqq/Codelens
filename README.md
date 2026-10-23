@@ -7,6 +7,7 @@ A Python debugging and reverse-engineering workspace:
   - Each question becomes a real MCP tool call over Streamable HTTP to the CodeLens MCP server (protocol 2025-11-25 or later).
   - The answer comes back as speech plus a visual card.
   - A live panel shows every MCP request and response.
+  - **Autopilot:** say "debug my code" and Alexa plans and chains the tools herself (run → diagnose → fix → test the fix with tests generated from the run), showing each step as "🧭 Alexa's plan". With an AI key the AI chooses the steps; without one a fixed plan runs the same chain.
   - **Lexi**, Alexa's character, speaks the answers (her mouth moves with the voice) and flies to the code page to point at the line an answer is about. Ask "show me the error" or "where did it stop?", or press 👉 Show me.
 - **🐢 Turtle drawing:** `import turtle` works in the sandbox, and the picture is drawn step by step with the code, in Robo Lab and on Game mode's Drawing board. It was designed after studying Scratch's pen and motion engine with REA ([`docs/REA_SCRATCH_STUDY.md`](docs/REA_SCRATCH_STUDY.md)).
 - **🤖 Robo Lab (the default view)**, built for an 8-year-old with no coding experience:
@@ -102,7 +103,7 @@ CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d --build
 
 ### Connecting Alexa+
 
-Register the MCP server as **Streamable HTTP** at `https://<your-host>/mcp`, with the header `Authorization: Bearer <access code>`. The server negotiates MCP protocol 2025-11-25 or later and offers 17 tools; the six "voice" tools return a short `speech` answer. [`server.json`](server.json) describes the same endpoint for MCP registries; replace `YOUR_PUBLIC_HOST` with your host.
+Register the MCP server as **Streamable HTTP** at `https://<your-host>/mcp`, with the header `Authorization: Bearer <access code>`. The server negotiates MCP protocol 2025-11-25 or later and offers 19 tools; the six "voice" tools return a short `speech` answer. [`server.json`](server.json) describes the same endpoint for MCP registries; replace `YOUR_PUBLIC_HOST` with your host.
 
 ## Configuration
 
@@ -150,11 +151,12 @@ If a configured provider fails or returns invalid JSON, the app falls back to th
 
 ## Using it from agents (MCP): Claude Code and Alexa+
 
-The CodeLens MCP server exposes 17 tools over the REST API:
+The CodeLens MCP server exposes 19 tools over the REST API:
 
 | Group | Tools |
 | --- | --- |
-| Conversational (voice-ready, each returns a short `speech` string) | `explain_code`, `get_execution_state`, `get_variable_state`, `get_debugging_summary`, `propose_fix`, `validate_fix` |
+| Agent (plans and chains the other tools by itself) | `debug_autopilot`: run → diagnose → propose a fix → test it with tests generated from the run; with an AI key the model chooses the steps through function calling |
+| Conversational (voice-ready, each returns a short `speech` string) | `ask_about_code`, `explain_code`, `get_execution_state`, `get_variable_state`, `get_debugging_summary`, `propose_fix`, `validate_fix` |
 | Debugging | `run_python`, `get_trace`, `get_step_state`, `get_source`, `explain_execution`, `propose_patch`, `validate_patch` |
 | Reverse engineering | `rea_analyze_javascript_application`, `rea_list_tools`, `rea_tool_schema`, `rea_call_tool` |
 

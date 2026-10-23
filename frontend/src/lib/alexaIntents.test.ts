@@ -12,7 +12,9 @@ describe('Alexa+ simulator intents', () => {
     expect(parseIntent('explain my program')).toEqual({ kind: 'run' });
     expect(parseIntent('Why did it crash?')).toEqual({ kind: 'summary' });
     expect(parseIntent('what went wrong')).toEqual({ kind: 'summary' });
-    expect(parseIntent('fix it')).toEqual({ kind: 'fix' });
+    expect(parseIntent('fix it')).toEqual({ kind: 'agent', goal: 'fix it' });
+    expect(parseIntent('debug my code')).toEqual({ kind: 'agent', goal: 'debug my code' });
+    expect(parseIntent('find and fix the bug')).toEqual({ kind: 'agent', goal: 'find and fix the bug' });
     expect(parseIntent('test the fix')).toEqual({ kind: 'validate' });
     expect(parseIntent('apply the fix')).toEqual({ kind: 'apply' });
     expect(parseIntent('where did it stop')).toEqual({ kind: 'state' });
@@ -21,7 +23,7 @@ describe('Alexa+ simulator intents', () => {
     expect(parseIntent('show me the error')).toEqual({ kind: 'show' });
     expect(parseIntent("my code isn't working")).toEqual({ kind: 'summary' });
     expect(parseIntent('what happened')).toEqual({ kind: 'summary' });
-    expect(parseIntent('how do I fix this')).toEqual({ kind: 'fix' });
+    expect(parseIntent('how do I fix this')).toEqual({ kind: 'agent', goal: 'how do i fix this' });
     expect(parseIntent('is the fix correct')).toEqual({ kind: 'validate' });
     expect(parseIntent('check my code')).toEqual({ kind: 'run' });
     expect(parseIntent('does it work')).toEqual({ kind: 'run' });

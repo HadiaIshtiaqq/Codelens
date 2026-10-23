@@ -93,3 +93,28 @@ async def ask(req: AskRequest, request: Request) -> dict:
     line_count = len(req.source_code.splitlines())
     line = result["line"] if result["line"] and 1 <= result["line"] <= line_count else None  # grounding check
     return {"speech": result["speech"], "line": line, "lines": [], "found": True, "source": "ai", "provider": provider.name}
+
+
+class AgentRequest(BaseModel):
+    source_code: str = Field(..., description="The program to work on")
+    goal: str = Field(default="Debug my code", max_length=500, description='What the user asked for, e.g. "fix my code"')
+
+    @field_validator("source_code")
+    @classmethod
+    def _size(cls, value: str) -> str:
+        limit = get_settings().max_source_bytes
+        if len(value.encode("utf-8")) > limit:
+            raise ValueError(f"source_code exceeds {limit // 1024} KB limit")
+        return value
+
+
+@router.post("/agent")
+async def agent(req: AgentRequest, request: Request) -> dict:
+    """Alexa's autopilot: plan and chain the CodeLens tools toward the goal (run -> diagnose -> fix -> test)."""
+    from app.services.agent import autopilot  # imports the MCP tool functions
+
+    provider = request.app.state.llm_provider
+    client = None
+    if provider.name != "offline":
+        client = LLMClient(provider, get_settings().llm_timeout_seconds, getattr(request.app.state, "llm_transport", None))
+    return await autopilot(req.source_code, req.goal, client)

@@ -8,6 +8,8 @@ export type Intent =
   | { kind: 'variable'; name: string }
   | { kind: 'state'; step?: number }
   | { kind: 'show' }
+  /** "Debug my code" / "fix it": Alexa plans and chains the tools herself (run, diagnose, fix, test). */
+  | { kind: 'agent'; goal: string }
   /** Any other question about the code ("how is the path calculated?"), answered from the code itself. */
   | { kind: 'ask'; question: string }
   | { kind: 'fix' }
@@ -48,7 +50,11 @@ export function parseIntent(utterance: string, variables: string[] = []): Intent
   if (/\b(validate|verify|test (the|that|this|my|your) (fix|change|patch)|check (the|that|your) fix|(does|did|will) (the|that|your) fix work|is (the|that|your) fix (right|correct|ok|good))\b/.test(text)) return { kind: 'validate' };
   if (/\b(apply|use|accept|keep) (the|that|this) (fix|patch|change)\b/.test(text)) return { kind: 'apply' };
   if (/\b(show me|point (to|at)|where('s| is) the (error|bug|problem|crash|mistake))\b/.test(text)) return { kind: 'show' };
-  if (/\b(fix|repair|solve|correct|patch|make it work|how (do|can|should) i (fix|correct|solve))\b/.test(text)) return { kind: 'fix' };
+  if (
+    /\b(debug|autopilot|fix|repair|solve|correct|patch|make (it|this|my code|the code) work|find (and fix )?the (bug|problem|error|mistake)|figure (it|this) out|how (do|can|should) i (fix|correct|solve))\b/.test(text)
+  ) {
+    return { kind: 'agent', goal: text };
+  }
 
   const step = text.match(/\bstep (\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
   if (step) return { kind: 'state', step: (NUMBER_WORDS[step[1]] ?? Number(step[1])) - 1 };

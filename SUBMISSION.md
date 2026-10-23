@@ -32,7 +32,7 @@ and **ask about it out loud**.
 ## How it works
 
 ```
-Alexa+ / any MCP client ──Streamable HTTP──▶  /mcp  (MCP server, 17 tools)
+Alexa+ / any MCP client ──Streamable HTTP──▶  /mcp  (MCP server, 19 tools)
 In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the REST API in-process
                                                ▼
                                    FastAPI ── sandbox (Docker: no network, read-only,
@@ -43,7 +43,7 @@ In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the RE
                                       └─ pytest validation in a fresh sandbox
 ```
 
-- **MCP server** ([`backend/app/mcp_server.py`](backend/app/mcp_server.py)): 17 tools.
+- **MCP server** ([`backend/app/mcp_server.py`](backend/app/mcp_server.py)): 19 tools.
   - **Six voice-ready tools:** `explain_code`, `get_debugging_summary`, `get_variable_state`,
     `get_execution_state`, `propose_fix` and `validate_fix`. Each returns a short `speech` string with the
     structured data behind it.
@@ -60,6 +60,11 @@ In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the RE
     panel.
   - **Intent mapping:** each utterance becomes one tool call through a tested, rule-based mapper
     ([`frontend/src/lib/alexaIntents.ts`](frontend/src/lib/alexaIntents.ts)), so the demo works offline.
+  - **Agentic autopilot** ([`backend/app/services/agent.py`](backend/app/services/agent.py), MCP tool `debug_autopilot`):
+    from one sentence ("debug my code") Alexa plans and chains the tools herself: run the code, diagnose
+    the failure, propose a fix, then test it with regression tests generated from the run, before saying
+    it works. With an AI key the model picks each next tool through function calling and sees every
+    result; without one, a fixed plan runs the same chain. Each step is shown as "🧭 Alexa's plan".
   - **Lexi, Alexa's character** ([`frontend/src/components/Companion.tsx`](frontend/src/components/Companion.tsx)):
     she speaks the answers and flies to the code page to point at the line an answer is about
     ("show me the error", "where did it stop?").
@@ -85,7 +90,7 @@ The repository's whole history is from 22–23 October 2026 (`git log --date=sho
 inside the window. Highlights from the window:
 
 - **Sandboxed tracer:** step-by-step replay with Robo Lab, Game and Classic views.
-- **MCP server:** 17 tools, with voice-ready speech output.
+- **MCP server:** 19 tools, with voice-ready speech output.
 - **Alexa+ simulator and browser MCP client:** with the `/mcp` endpoint served from the main app.
 - **Turtle drawing stage:** designed from the REA study of Scratch.
 - **Robo Lab:** Robo, read-aloud, blocks, challenges, auto-play and the progress track.
@@ -95,7 +100,7 @@ inside the window. Highlights from the window:
 
 | Tool | What we used it for | What worked well | What needs work | Again? |
 |---|---|---|---|---|
-| **MCP Python SDK** (`mcp` 2.3.0), Streamable HTTP | The CodeLens MCP server, 17 tools | Typed tools with structured output; protocol negotiation to 2025-11-25 and later worked first time; DNS-rebinding and origin protection are on by default | Mounting inside an existing FastAPI app: the session manager's `run()` works only once per instance, which broke our test suite until we rebuilt the endpoint for each app start (friction log M3). The 1.x → 2.x rename of `FastMCP` to `MCPServer` cost time (M1) | Yes |
+| **MCP Python SDK** (`mcp` 2.3.0), Streamable HTTP | The CodeLens MCP server, 19 tools | Typed tools with structured output; protocol negotiation to 2025-11-25 and later worked first time; DNS-rebinding and origin protection are on by default | Mounting inside an existing FastAPI app: the session manager's `run()` works only once per instance, which broke our test suite until we rebuilt the endpoint for each app start (friction log M3). The 1.x → 2.x rename of `FastMCP` to `MCPServer` cost time (M1) | Yes |
 | **Model Context Protocol** (spec) | Browser MCP client written from scratch | Small surface: four messages are enough for a useful client. Session ids and SSE responses are simple to handle | A minimal "client in 50 lines" example for the Streamable HTTP wire format would help people building simulators | Yes |
 | **Alexa+ (Developer Preview)** | Target platform for the MCP server | **[YOU]** Onboarding, console, how the MCP endpoint was registered | **[YOU]** | **[YOU]** |
 | **REA** (`rea-agents` 6.7.0) | Studying Scratch's engine; reverse-engineering tab | Evidence documents with stable ids; accurate `destructiveHint` annotations | Analysing a 25 MB package over MCP returned only "Error executing tool", with no reason or size hint (friction log R9) | Yes |

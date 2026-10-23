@@ -392,6 +392,10 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
   await page.getByRole('button', { name: '← Back to Alexa' }).click();
   await page.getByLabel('Say something to Alexa').waitFor();
   await ask('how is the total calculated', /Here is how your code handles total/); // open questions, from the code
+  // Autopilot: Alexa chains the tools herself (run -> diagnose -> fix -> test) from one sentence.
+  await ask('debug my code', /fix is validated/);
+  const plan = await page.getByTestId('alexa-plan').last().innerText();
+  for (const tool of ['run_code', 'diagnose', 'propose_fix', 'test_fix']) if (!plan.includes(tool)) throw new Error(`plan misses ${tool}: ${plan}`);
   await ask('fix it', /I have a fix/);
   await ask('test the fix', /apply the fix/);
   await ask('apply the fix', /put the fixed code in your editor/);

@@ -327,3 +327,46 @@ def test_gemini_is_picked_automatically_and_uses_a_flash_model():
     ids = ["models/gemini-2.0-flash", "models/gemini-2.5-flash", "models/gemini-2.5-flash-lite", "models/gemini-2.5-pro",
            "models/text-embedding-004", "models/gemini-2.5-flash-preview-tts"]
     assert choose_model(ids, "gemini") == "gemini-2.5-flash"
+
+
+# --------------------------------------------------------------------------- Alexa's autopilot (agent)
+
+BROKEN_TOTAL = "def total(xs):\n    s = 0\n    for i in range(len(xs) + 1):\n        s += xs[i]\n    return s\n\nprint(total([1, 2, 3]))\n"
+
+
+def test_autopilot_without_ai_runs_diagnoses_fixes_and_tests(client):
+    body = client.post("/api/v1/agent", json={"source_code": BROKEN_TOTAL, "goal": "debug my code"}).json()
+    assert body["source"] == "planner"
+    assert [s["tool"] for s in body["steps"]] == ["run_code", "diagnose", "propose_fix", "test_fix"]
+    assert body["line"] == 4 and body["patch"]["status"] == "validated"  # tests generated from the run
+    assert "range(len(xs))" in body["patch"]["patched_source"] and 'apply the fix' in body["speech"]
+
+
+def test_autopilot_with_ai_lets_the_model_choose_the_tools(client, llm_app):
+    turns = iter([
+        {"tool_calls": [{"id": "1", "type": "function", "function": {"name": "run_code", "arguments": "{}"}}]},
+        {"tool_calls": [{"id": "2", "type": "function", "function": {"name": "variable_history", "arguments": '{"name": "s"}'}}]},
+        {"content": "It crashed on line 4 because i reached 3. s went 0, 1, 3, 6 first."},
+    ])
+    seen = []
+
+    def handler(request: httpx.Request):
+        body = json.loads(request.content)
+        if "tools" not in body:  # run_code's own explanation request also uses the AI
+            return _reply({"summary": "An IndexError on line 4.", "likely_cause": "i reaches len(xs).", "cited_lines": [4]})
+        seen.append(body)
+        return httpx.Response(200, json={"choices": [{"message": next(turns)}]})
+
+    _mock_llm(llm_app, handler)
+    body = client.post("/api/v1/agent", json={"source_code": BROKEN_TOTAL, "goal": "why does it crash"}).json()
+    assert body["source"] == "ai" and [s["tool"] for s in body["steps"]] == ["run_code", "variable_history"]
+    assert body["speech"].startswith("It crashed on line 4") and body["line"] == 4
+    assert {t["function"]["name"] for t in seen[0]["tools"]} >= {"run_code", "diagnose", "propose_fix", "test_fix"}
+    tool_result = json.loads(seen[2]["messages"][-1]["content"])  # the model saw the real variable history
+    assert tool_result["values"][:4] == ["0", "1", "3", "6"]
+
+
+def test_autopilot_falls_back_to_the_plan_when_the_ai_fails(client, llm_app):
+    _mock_llm(llm_app, lambda request: httpx.Response(500, text="down"))
+    body = client.post("/api/v1/agent", json={"source_code": BROKEN_TOTAL}).json()
+    assert body["source"] == "planner" and body["patch"]["status"] == "validated"

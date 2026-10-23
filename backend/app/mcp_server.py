@@ -247,6 +247,13 @@ async def ask_about_code(source_code: str, question: str, execution_id: Optional
                                                     "execution_id": execution_id})
 
 
+@mcp.tool(description="Voice-friendly autopilot: work toward a goal such as \"debug my code\" by chaining the "
+                      "other tools itself (run -> diagnose -> propose a fix -> test the fix). Returns `speech`, every "
+                      "step it took, and the tested patch if there is one.")
+async def debug_autopilot(source_code: str, goal: str = "Debug my code") -> dict[str, Any]:
+    return await _call("POST", "/api/v1/agent", json={"source_code": source_code, "goal": goal})
+
+
 @mcp.tool(description="Voice-friendly: where the program is at a step (default: the failing or last step): line, "
                       "function, call stack and variables, with a `speech` summary.")
 async def get_execution_state(execution_id: str, step: Optional[int] = None) -> dict[str, Any]:
@@ -343,7 +350,9 @@ async def validate_fix(patch_id: str, tests: Optional[str] = None) -> dict[str, 
     result = await _call("POST", "/api/v1/patches/validate", json={"patch_id": patch_id, "tests": tests})
     status = result["status"]
     if status == "validated":
-        speech = f"Great news: all {result['tests_passed']} tests passed, so the fix is validated."
+        passed = result["tests_passed"]
+        speech = ("Great news: the test passed, so the fix is validated." if passed == 1
+                  else f"Great news: all {passed} tests passed, so the fix is validated.")
     elif status == "failed":
         speech = f"The fix is not ready: {result['tests_failed']} test{'s' if result['tests_failed'] != 1 else ''} failed."
     else:

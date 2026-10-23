@@ -26,7 +26,8 @@ type Card =
   | { kind: 'diff'; diff: string }
   | { kind: 'history'; name: string; values: string[] }
   | { kind: 'state'; line: number; where: string }
-  | { kind: 'tools'; names: string[] };
+  | { kind: 'tools'; names: string[] }
+  | { kind: 'plan'; steps: { tool: string; summary: string }[]; diff?: string; byAi: boolean };
 
 interface SpeechRecognitionLike {
   lang: string;
@@ -130,7 +131,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
     switch (intent.kind) {
       case 'help':
         return say(
-          `I'm connected to CodeLens through its MCP server, with ${client.tools.length} tools. Ask me to run your code, why it crashed, what a variable is, where it stopped, to fix it, or to test the fix.`,
+          `I'm connected to CodeLens through its MCP server, with ${client.tools.length} tools. Say “debug my code” and I'll run it, find the bug, fix it and test the fix by myself. You can also ask why it crashed, what a variable is, where it stopped, or how any part of it works.`,
           viaVoice,
           { card: { kind: 'tools', names: client.tools.map((t) => t.name) } },
         );
@@ -196,6 +197,25 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
         if (!lastPatch) return say('There is no fix to apply yet. Say "fix it" first.', viaVoice);
         dbg.setSource(lastPatch.patched_source);
         return say("Done. I put the fixed code in your editor. Say run my code to try it.", viaVoice);
+      }
+      case 'agent': {
+        // Alexa's autopilot: she chains the tools herself and reports every step.
+        const res = await client.callTool<{
+          speech: string;
+          steps: { tool: string; summary: string }[];
+          line: number | null;
+          execution_id: string | null;
+          failed: boolean;
+          patch: { patch_id: string; patched_source: string; diff: string; status?: string } | null;
+          source: 'ai' | 'planner';
+        }>('debug_autopilot', { source_code: dbg.source, goal: intent.goal });
+        if (res.execution_id) setLastRun({ execution_id: res.execution_id, failed: res.failed });
+        if (res.patch) setLastPatch({ patch_id: res.patch.patch_id, patched_source: res.patch.patched_source });
+        return say(res.speech, viaVoice, {
+          tool: res.source === 'ai' ? 'debug_autopilot · planned by the AI' : 'debug_autopilot',
+          line: res.line ?? undefined,
+          card: { kind: 'plan', steps: res.steps, diff: res.patch?.diff, byAi: res.source === 'ai' },
+        });
       }
       case 'ask': {
         // Open questions are answered from the code itself, and Lexi can show the main line.
@@ -289,7 +309,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
     : lastPatch
       ? ['Test the fix', 'Apply the fix', 'Why did it crash?']
       : lastRun.failed
-        ? ['Why did it crash?', 'Fix it', 'Where did it stop?', ...(example ? [`What is ${example}?`] : [])]
+        ? ['Debug my code', 'Why did it crash?', 'Where did it stop?', ...(example ? [`What is ${example}?`] : [])]
         : [...(example ? [`What is ${example}?`] : []), 'Where did it stop?', 'Run my code'];
 
   return (
@@ -377,6 +397,41 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
                             <span className="rounded bg-black/40 px-1.5 text-slate-100">{v}</span>
                           </span>
                         ))}
+                      </div>
+                    )}
+                    {t.card?.kind === 'plan' && (
+                      <div className="mt-3 rounded-xl border border-cyan-400/30 bg-black/20 p-3" data-testid="alexa-plan">
+                        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-cyan-300">
+                          🧭 Alexa's plan · {t.card.steps.length} step{t.card.steps.length === 1 ? '' : 's'}
+                          {t.card.byAi ? ' · chosen by the AI' : ''}
+                        </p>
+                        <ol className="space-y-1.5">
+                          {t.card.steps.map((st, i) => (
+                            <li key={i} className="cl-slide-in flex gap-2 text-sm" style={{ animationDelay: `${i * 120}ms`, animationFillMode: 'backwards' }}>
+                              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-cyan-500 text-[11px] font-bold text-slate-950">
+                                {i + 1}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="font-mono text-xs text-cyan-200">{st.tool}</span>
+                                <span className="block truncate text-slate-300" title={st.summary}>
+                                  {st.summary}
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                        {t.card.diff && (
+                          <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-black/40 p-2 font-mono text-xs leading-relaxed">
+                            {t.card.diff.split('\n').map((line, i) => (
+                              <span
+                                key={i}
+                                className={`block ${line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-300' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-300' : 'text-slate-400'}`}
+                              >
+                                {line || ' '}
+                              </span>
+                            ))}
+                          </pre>
+                        )}
                       </div>
                     )}
                     {t.card?.kind === 'tools' && (

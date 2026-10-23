@@ -213,6 +213,28 @@ class LLMClient:
             raise LLMError(f"{p.name} returned an unexpected response shape") from exc
         return _extract_json(content)
 
+    async def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """One step of a tool-using conversation: returns the assistant message (content and/or tool_calls)."""
+        p = self.provider
+        body = {"model": await self.ensure_model(), "temperature": 0.1, "max_tokens": 2048,
+                "messages": messages, "tools": tools, "tool_choice": "auto"}
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=10.0), transport=self.transport
+            ) as client:
+                resp = await client.post(f"{p.base_url}/chat/completions", headers=self._headers(), json=body)
+        except httpx.HTTPError as exc:
+            raise LLMError(f"{p.name} request failed: {type(exc).__name__}: {exc}") from exc
+        if resp.status_code != 200:
+            raise LLMError(f"{p.name} returned HTTP {resp.status_code}: {resp.text[:300]}")
+        try:
+            message = resp.json()["choices"][0]["message"]
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise LLMError(f"{p.name} returned an unexpected response shape") from exc
+        if isinstance(message.get("content"), str):
+            message["content"] = _THINK_RE.sub("", message["content"]).strip()
+        return message
+
     async def answer_question(self, context: str, question: str) -> dict[str, Any]:
         """A short spoken answer to a question about the user's code: {"speech": str, "line": int | None}."""
         prompt = f"{context}\n\nQUESTION (spoken to Alexa): {question}\n\n{ASK_INSTRUCTIONS}"
