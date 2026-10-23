@@ -384,7 +384,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
               role="radio"
               aria-checked={view === v}
               onClick={() => onView(v)}
-              className={`px-2.5 py-1 font-semibold ${view === v ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
+              className={`px-2.5 py-1 font-semibold ${view === v ? 'bg-cyan-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
               title={
                 v === 'cards'
                   ? 'Each variable on a card with its value written out'

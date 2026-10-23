@@ -117,13 +117,15 @@ export default function App() {
       {locked && <AccessGate onUnlocked={() => setLocked(false)} />}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-slate-950/70 px-4 py-2 backdrop-blur-xl">
         <h1 className="group flex items-center gap-2 text-lg font-extrabold tracking-tight">
-          <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 via-sky-500 to-fuchsia-500 shadow-[0_0_18px_rgba(99,102,241,0.45)] transition group-hover:rotate-6">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-cyan-400 to-sky-600 shadow-[0_0_16px_rgba(34,211,238,0.4)] transition group-hover:rotate-6">
             <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden>
               <circle cx="14" cy="14" r="9" fill="none" stroke="white" strokeWidth="4" />
               <path d="M21 21l7 7" stroke="white" strokeWidth="4" strokeLinecap="round" />
             </svg>
           </span>
-          <span className="gradient-text">CodeLens AI</span>
+          <span className="text-white">
+            CodeLens <span className="text-cyan-300">AI</span>
+          </span>
         </h1>
         <nav role="tablist" aria-label="Workspace" className="flex flex-wrap gap-1 rounded-full border border-white/10 bg-slate-900/60 p-1">
           {tabs.map(([id, label]) => (

@@ -136,7 +136,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
           role="radio"
           aria-checked={mode === m}
           onClick={() => setMode(m)}
-          className={`px-2.5 py-1 font-semibold ${mode === m ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
+          className={`px-2.5 py-1 font-semibold ${mode === m ? 'bg-cyan-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
         >
           {m === 'kids' ? '🧸 Kids' : m === 'game' ? '🎮 Game' : '📋 Classic'}
         </button>
@@ -279,7 +279,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
             <div className="min-h-[52px] shrink-0 border-b border-slate-800 bg-slate-950/80 px-3 py-2" aria-live="polite">
               {event ? (
                 <div className="flex items-start gap-2">
-                  <span className="mt-0.5 shrink-0 rounded-md bg-blue-600 px-2 py-0.5 font-mono text-xs font-bold">
+                  <span className="mt-0.5 shrink-0 rounded-md bg-cyan-500 px-2 py-0.5 font-mono text-xs font-bold text-slate-950">
                     LINE {event.line}
                     {eventFile !== MAIN_FILE && ` · ${eventFile}`}
                   </span>

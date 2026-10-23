@@ -166,7 +166,7 @@ export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }
             max={Math.max(0, total - 1)}
             value={step}
             onChange={(e) => dbg.goTo(Number(e.target.value))}
-            className="flex-1 accent-blue-500"
+            className="flex-1 accent-cyan-400"
             aria-valuetext={`Step ${step + 1} of ${total}`}
           />
           <span className="whitespace-nowrap font-mono text-xs text-slate-300" aria-live="polite">
