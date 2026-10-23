@@ -83,7 +83,11 @@ export function CompanionLayer({ view, enabled, onGoAlexa }: { view: string; ena
         if (!home || home.width === 0) return;
         next = { x: home.left, y: home.top, size: home.width, where: 'home' };
       } else {
-        next = { x: 16, y: window.innerHeight - 72, size: 56, where: 'dock' };
+        // Wait in the header next to the Alexa+ tab, so Lexi never covers the page.
+        const dock = document.querySelector('[data-lexi-dock]')?.getBoundingClientRect();
+        next = dock && dock.width > 0
+          ? { x: dock.left, y: dock.top, size: dock.width, where: 'dock' }
+          : { x: 16, y: window.innerHeight - 72, size: 56, where: 'dock' };
       }
       const prev = last.current;
       if (Math.abs(prev.x - next.x) < 1 && Math.abs(prev.y - next.y) < 1 && prev.size === next.size && prev.where === next.where) return;

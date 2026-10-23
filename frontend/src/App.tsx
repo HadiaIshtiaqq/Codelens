@@ -135,6 +135,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        {visited.has('alexa') && view !== 'alexa' && <span data-lexi-dock className="block h-10 w-10" aria-hidden />}
         <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
           <button
             className="chip border-white/10 bg-slate-900/70 text-slate-200 transition hover:border-cyan-400/50"

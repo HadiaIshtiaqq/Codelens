@@ -71,8 +71,8 @@ export function DebuggerView({ dbg }: Props) {
   // Each view explains the program in its own voice (Robo Lab has its own plan in KidsView).
   const plan = useCodeExplanation(dbg.editorValue, mode === 'classic' ? 'classic' : 'game');
   const game = useGame(dbg);
-  // One player for all three views: switching views keeps playing from the same step. Robo Lab plays slower.
-  const playback = usePlayback(dbg, { tempo: mode === 'kids' ? 2 : 1, blocked: game.awaitingGuess });
+  // One player for all three views, at the same speed: switching views keeps playing from the same step.
+  const playback = usePlayback(dbg, { blocked: game.awaitingGuess });
   const revealLine = (line: number) => setReveal({ line, nonce: Date.now() });
 
   useEffect(() => {
