@@ -165,7 +165,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
         return say("Done. I put the fixed code in your editor. Say run my code to try it.", viaVoice);
       }
       default:
-        return say("Sorry, I didn't catch that. Try: run my code, why did it crash, or fix it.", viaVoice);
+        return say("I'm your coding helper, so I can only answer questions about the code in your editor. Try one of the buttons below.", viaVoice);
     }
   };
 
@@ -236,188 +236,207 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
   };
 
   const lightLabel = { idle: 'Ready', listening: 'Listening…', thinking: 'Asking CodeLens…', speaking: 'Speaking', error: 'Something went wrong' }[light];
+  const ready = connected === 'ok';
+  const busy = light === 'thinking';
+
+  // What makes sense to ask next, given where the conversation is.
+  const example = variables.find((v) => v.length > 1) ?? variables[0];
+  const followUps = !lastRun
+    ? SUGGESTIONS.slice(0, 1).concat('What can you do?')
+    : lastPatch
+      ? ['Test the fix', 'Apply the fix', 'Why did it crash?']
+      : lastRun.failed
+        ? ['Why did it crash?', 'Fix it', 'Where did it stop?', ...(example ? [`What is ${example}?`] : [])]
+        : [...(example ? [`What is ${example}?`] : []), 'Where did it stop?', 'Run my code'];
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+    <div className="grid h-full min-h-0 grid-cols-1 gap-4 overflow-auto p-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
       {/* The device */}
-      <section className="flex min-h-0 flex-col gap-3" aria-label="Alexa+ simulator">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-extrabold">
-            <span className="gradient-text">Alexa+ simulator</span>
+      <section className="flex min-h-[460px] min-w-0 flex-col gap-3 lg:min-h-0" aria-label="Alexa+ simulator">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.9)]" aria-hidden />
+            Alexa+ simulator
           </h2>
-          <span className="text-xs text-slate-400">Talk to CodeLens the way Alexa+ does: through its MCP server.</span>
+          <span className="text-sm text-slate-400">Ask about your code. Alexa answers through the CodeLens MCP server.</span>
           <span
-            className={`chip ml-auto ${connected === 'ok' ? 'border-cyan-400/40 bg-cyan-950/60 text-cyan-100' : connected === 'failed' ? 'border-red-500/50 bg-red-950/60 text-red-100' : 'border-white/10 text-slate-300'}`}
+            className={`chip ml-auto ${ready ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-100' : connected === 'failed' ? 'border-rose-500/50 bg-rose-500/10 text-rose-100' : 'border-white/10 text-slate-300'}`}
             role="status"
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${connected === 'ok' ? 'cl-pulse-dot bg-cyan-400 text-cyan-400/60' : connected === 'failed' ? 'bg-red-400' : 'bg-slate-400'}`} />
-            {connected === 'ok' ? `MCP connected · ${client.tools.length} tools` : connected === 'failed' ? 'MCP unavailable' : 'connecting…'}
+            <span className={`h-1.5 w-1.5 rounded-full ${ready ? 'cl-pulse-dot bg-cyan-400 text-cyan-400/60' : connected === 'failed' ? 'bg-rose-400' : 'bg-slate-400'}`} />
+            {ready ? `MCP connected · ${client.tools.length} tools` : connected === 'failed' ? 'MCP unavailable' : 'connecting…'}
           </span>
         </div>
 
-        <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-[2rem] border-[10px] border-slate-950 bg-gradient-to-br from-slate-900 via-[#0b1630] to-[#05202b] shadow-2xl shadow-cyan-950/40 ring-1 ring-white/10">
-          <div ref={conversation} className="min-h-0 flex-1 space-y-3 overflow-auto p-5" aria-live="polite">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] border-[8px] border-black bg-[#0a1424] shadow-2xl shadow-black/50 ring-1 ring-white/10">
+          <div ref={conversation} className="min-h-0 flex-1 space-y-3 overflow-auto p-4 sm:p-5" aria-live="polite">
             {turns.length === 0 && (
-              <div className="cl-view-in flex h-full flex-col items-center justify-center gap-3 text-center">
+              <div className="cl-view-in flex min-h-full flex-col items-center justify-center gap-3 py-4 text-center">
                 <button
                   className={`alexa-orb ${light} shrink-0 transition hover:scale-105 disabled:opacity-50`}
                   onClick={listen}
-                  disabled={connected !== 'ok'}
+                  disabled={!ready}
                   aria-label="Tap to speak to Alexa"
                   title="Tap to speak"
                 />
                 <p className="text-xl font-semibold text-white">Tap the orb and say “Alexa, run my code.”</p>
-                <p className="max-w-md text-sm text-slate-400">
-                  Or type below, or tap one of the suggestions. Alexa answers from the CodeLens trace: what ran, why it crashed, what a variable held, and a
-                  fix that is tested before you trust it.
+                <p className="max-w-md text-sm leading-relaxed text-slate-400">
+                  Or type below. Alexa answers from the recorded run of your code: what happened, why it crashed, what a variable held, and a fix that is
+                  tested before you trust it.
                 </p>
               </div>
             )}
             {turns.map((t) =>
               t.who === 'you' ? (
-                <p key={t.id} className="cl-view-in ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-sm bg-slate-700/80 px-4 py-2 text-base text-slate-100">
+                <p key={t.id} className="cl-view-in ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-cyan-500/15 px-4 py-2 text-base text-cyan-50 ring-1 ring-cyan-400/25">
                   {t.text}
                 </p>
               ) : (
-                <div key={t.id} className="cl-float-up max-w-[92%] rounded-2xl rounded-bl-sm border border-cyan-400/30 bg-cyan-950/40 px-4 py-3">
-                  <p className="text-lg leading-snug text-white">{t.text}</p>
-                  {t.card?.kind === 'diff' && (
-                    <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-950/80 p-2 font-mono text-xs leading-relaxed">
-                      {t.card.diff.split('\n').map((line, i) => (
-                        <span
-                          key={i}
-                          className={`block ${line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-300' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-300' : 'text-slate-400'}`}
-                        >
-                          {line || ' '}
-                        </span>
-                      ))}
-                    </pre>
-                  )}
-                  {t.card?.kind === 'history' && (
-                    <div className="mt-2 flex flex-wrap items-center gap-1 font-mono text-sm">
-                      <span className="text-cyan-200">{t.card.name}:</span>
-                      {t.card.values.map((v, i) => (
-                        <span key={i} className="flex items-center gap-1">
-                          {i > 0 && <span className="text-slate-500">→</span>}
-                          <span className="rounded bg-slate-900 px-1.5 text-amber-100">{v}</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {t.card?.kind === 'state' && (
-                    <button className="btn mt-2" onClick={onShowDebugger}>
-                      👀 Show line {t.card.line} in the debugger
-                    </button>
-                  )}
-                  {t.card?.kind === 'tools' && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {t.card.names.map((n) => (
-                        <span key={n} className="rounded-full bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] text-cyan-100">
-                          {n}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {t.tool && <p className="mt-1.5 font-mono text-[11px] text-cyan-300/70">via MCP tool {t.tool}</p>}
+                <div key={t.id} className="cl-float-up flex max-w-[92%] gap-3">
+                  <span className="mt-1 h-7 w-7 shrink-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,#a5f3fc,#22d3ee_40%,#0e7490)]" aria-hidden />
+                  <div className="min-w-0 rounded-2xl rounded-tl-md bg-slate-800/70 px-4 py-3 ring-1 ring-white/10">
+                    <p className="text-[17px] leading-snug text-slate-50">{t.text}</p>
+                    {t.card?.kind === 'diff' && (
+                      <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-black/40 p-2 font-mono text-xs leading-relaxed">
+                        {t.card.diff.split('\n').map((line, i) => (
+                          <span
+                            key={i}
+                            className={`block ${line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-300' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-300' : 'text-slate-400'}`}
+                          >
+                            {line || ' '}
+                          </span>
+                        ))}
+                      </pre>
+                    )}
+                    {t.card?.kind === 'history' && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1 font-mono text-sm">
+                        <span className="text-cyan-200">{t.card.name}:</span>
+                        {t.card.values.map((v, i) => (
+                          <span key={i} className="flex items-center gap-1">
+                            {i > 0 && <span className="text-slate-500">→</span>}
+                            <span className="rounded bg-black/40 px-1.5 text-slate-100">{v}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {t.card?.kind === 'state' && (
+                      <button className="btn mt-2" onClick={onShowDebugger}>
+                        👀 Show line {t.card.line} in the debugger
+                      </button>
+                    )}
+                    {t.card?.kind === 'tools' && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {t.card.names.map((n) => (
+                          <span key={n} className="rounded-full bg-black/40 px-2 py-0.5 font-mono text-[11px] text-cyan-100">
+                            {n}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {t.tool && <p className="mt-1.5 font-mono text-[11px] text-slate-500">via MCP tool {t.tool}</p>}
+                  </div>
                 </div>
               ),
             )}
-            {heard && <p className="ml-auto w-fit max-w-[80%] rounded-2xl bg-slate-800/60 px-4 py-2 italic text-slate-300">{heard}…</p>}
+            {heard && <p className="ml-auto w-fit max-w-[80%] rounded-2xl bg-cyan-500/10 px-4 py-2 italic text-cyan-100/80">{heard}…</p>}
           </div>
-          {/* Alexa's light bar along the bottom of the screen */}
-          <div className="px-5 pb-3">
-            <div className={`alexa-bar ${light}`} />
-            <p className="mt-1 text-center text-[11px] font-semibold uppercase tracking-widest text-cyan-200/70">{lightLabel}</p>
+
+          {/* Docked at the bottom of the screen, so it is always in view. */}
+          <div className="space-y-2 border-t border-white/10 bg-black/20 px-3 pb-3 pt-2">
+            <div className="flex flex-wrap gap-1.5" aria-label="Suggestions">
+              {followUps.map((s) => (
+                <button
+                  key={s}
+                  className="rounded-full border border-cyan-400/30 bg-cyan-400/5 px-3 py-1 text-sm text-cyan-100 transition hover:-translate-y-px hover:bg-cyan-400/15 disabled:opacity-40"
+                  onClick={() => void ask(s, false)}
+                  disabled={!ready || busy}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void ask(typed, false);
+                setTyped('');
+              }}
+            >
+              <button
+                type="button"
+                className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-xl transition hover:scale-105 active:scale-95 disabled:opacity-40 ${light === 'listening' ? 'bg-cyan-300 text-slate-900 shadow-[0_0_20px_rgba(34,211,238,0.8)]' : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'}`}
+                onClick={listen}
+                disabled={!ready}
+                aria-pressed={light === 'listening'}
+                aria-label={light === 'listening' ? 'Stop listening' : 'Speak to Alexa'}
+                title={Recognition ? 'Tap and speak' : 'Voice input needs Chrome or Edge; type instead'}
+              >
+                🎙
+              </button>
+              <input
+                ref={inputRef}
+                className="input min-w-0 flex-1 rounded-full px-4 py-2.5 text-base"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder="Type a question, like “why did it crash?”"
+                aria-label="Say something to Alexa"
+                disabled={!ready}
+              />
+              <button className="btn btn-primary rounded-full px-4" disabled={!ready || !typed.trim() || busy}>
+                Ask
+              </button>
+            </form>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <div className={`alexa-bar ${light} min-w-[120px] flex-1`} />
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-cyan-200/70">{lightLabel}</span>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            className={`grid h-14 w-14 shrink-0 place-items-center rounded-full text-2xl shadow-lg transition hover:scale-105 active:scale-95 disabled:opacity-40 ${light === 'listening' ? 'bg-cyan-400 text-slate-900 shadow-cyan-400/50' : 'bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-cyan-900/50'}`}
-            onClick={listen}
-            disabled={!Recognition || connected !== 'ok'}
-            aria-pressed={light === 'listening'}
-            aria-label={light === 'listening' ? 'Stop listening' : 'Speak to Alexa'}
-            title={Recognition ? 'Tap and speak' : 'Voice input needs Chrome or Edge; type instead'}
-          >
-            🎙
-          </button>
-          <form
-            className="flex min-w-[220px] flex-1 gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void ask(typed, false);
-              setTyped('');
-            }}
-          >
-            <input
-              ref={inputRef}
-              className="input flex-1 py-2.5 text-base"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder="Or type what you'd say: “why did it crash?”"
-              aria-label="Say something to Alexa"
-              disabled={connected !== 'ok'}
-            />
-            <button className="btn btn-primary" disabled={connected !== 'ok' || !typed.trim()}>
-              Ask
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <span>
+            Alexa works on the code in the Python Debugger tab ({dbg.source.split('\n').length} lines).{' '}
+            <button className="underline hover:text-slate-300" onClick={onShowDebugger}>
+              Edit it there
             </button>
-          </form>
+          </span>
           {speechSupported && (
-            <label className="flex items-center gap-1.5 text-xs text-slate-400" title="Spoken questions always get a spoken answer">
+            <label className="flex items-center gap-1.5" title="Spoken questions always get a spoken answer">
               <input type="checkbox" checked={alwaysSpeak} onChange={(e) => setAlwaysSpeak(e.target.checked)} />
               🔊 read typed answers aloud
             </label>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              className="rounded-full border border-cyan-400/30 bg-cyan-950/30 px-3 py-1 text-sm text-cyan-100 transition hover:-translate-y-px hover:bg-cyan-900/50 disabled:opacity-40"
-              onClick={() => void ask(s, false)}
-              disabled={connected !== 'ok' || light === 'thinking'}
-            >
-              “{s}”
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-slate-500">
-          Alexa works on the code in the Python Debugger tab ({dbg.source.split('\n').length} lines).{' '}
-          <button className="underline hover:text-slate-300" onClick={onShowDebugger}>
-            Edit it there
-          </button>
-          .
-        </p>
       </section>
 
       {/* The developer's view of the same conversation */}
-      <section className="panel min-h-[320px] overflow-hidden" aria-label="MCP traffic">
+      <section className="panel min-h-[320px] min-w-0 overflow-hidden" aria-label="MCP traffic">
         <div className="panel-title">
-          <span>🔌 MCP traffic · Streamable HTTP</span>
+          <span>MCP traffic · Streamable HTTP</span>
           <button className="normal-case text-slate-500 hover:text-slate-200" onClick={() => setLog([])}>
             clear
           </button>
         </div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-b border-white/10 px-3 py-2 font-mono text-[11px]">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 border-b border-white/10 px-3 py-2 font-mono text-[11px]">
           <dt className="text-slate-500">endpoint</dt>
           <dd className="truncate text-slate-200">POST {window.location.origin}/mcp</dd>
           <dt className="text-slate-500">protocol</dt>
-          <dd className="text-slate-200">{client.protocolVersion || MCP_PROTOCOL_VERSION}</dd>
+          <dd className="truncate text-slate-200">{client.protocolVersion || MCP_PROTOCOL_VERSION}</dd>
           <dt className="text-slate-500">session</dt>
           <dd className="truncate text-slate-200">{client.sessionId ?? '—'}</dd>
         </dl>
         <ol className="min-h-0 flex-1 space-y-1 overflow-auto p-2 font-mono text-xs" data-testid="mcp-log">
           {log.length === 0 && <li className="p-2 text-slate-500">Requests appear here as Alexa talks to the server.</li>}
           {log.map((e) => (
-            <li key={e.id} className="cl-slide-in">
-              <details className="rounded-md border border-white/5 bg-slate-950/60">
-                <summary className="flex cursor-pointer items-center gap-2 px-2 py-1">
-                  <span className={e.direction === 'request' ? 'text-sky-300' : e.direction === 'error' ? 'text-rose-300' : 'text-emerald-300'}>
+            <li key={e.id} className="cl-slide-in min-w-0">
+              <details className="rounded-md border border-white/5 bg-black/30">
+                <summary className="flex min-w-0 cursor-pointer items-center gap-2 px-2 py-1">
+                  <span className={`shrink-0 ${e.direction === 'request' ? 'text-cyan-300' : e.direction === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}>
                     {e.direction === 'request' ? '→' : e.direction === 'error' ? '✖' : '←'}
                   </span>
-                  <span className="text-slate-100">{e.method}</span>
-                  <span className="truncate text-slate-500">{e.summary}</span>
+                  <span className="shrink-0 text-slate-100">{e.method}</span>
+                  <span className="min-w-0 truncate text-slate-500">{e.summary}</span>
                 </summary>
                 <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all border-t border-white/5 p-2 text-[11px] text-slate-400">
                   {JSON.stringify(e.body, null, 2)?.slice(0, 6000) ?? '(no body)'}
@@ -427,8 +446,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           ))}
         </ol>
         <p className="border-t border-white/10 px-3 py-2 text-[11px] text-slate-500">
-          Real Alexa+ connects to the same server: register <span className="font-mono text-slate-300">https://&lt;your-host&gt;/mcp</span> (see
-          README, “Using it from agents”).
+          Real Alexa+ connects to the same server: register <span className="font-mono text-slate-300">https://&lt;your-host&gt;/mcp</span>.
         </p>
       </section>
     </div>
