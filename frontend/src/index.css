@@ -289,12 +289,20 @@
   box-shadow: 0 0 14px rgba(249, 115, 22, 0.7);
 }
 .alexa-orb {
-  width: 96px;
-  height: 96px;
+  width: 84px;
+  height: 84px;
+  cursor: pointer;
   border-radius: 999px;
   background: radial-gradient(circle at 35% 30%, #a5f3fc, #22d3ee 35%, #1e40af 75%);
   box-shadow: 0 0 40px rgba(34, 211, 238, 0.45), inset 0 0 20px rgba(255, 255, 255, 0.25);
   animation: alexa-breathe 3s ease-in-out infinite;
+}
+.alexa-orb.listening {
+  box-shadow: 0 0 60px rgba(34, 211, 238, 0.9), inset 0 0 20px rgba(255, 255, 255, 0.35);
+  animation: alexa-breathe 0.9s ease-in-out infinite;
+}
+.alexa-orb.thinking {
+  animation: alexa-breathe 0.5s ease-in-out infinite;
 }
 @keyframes alexa-breathe {
   0%, 100% { opacity: 0.75; transform: scale(1); }

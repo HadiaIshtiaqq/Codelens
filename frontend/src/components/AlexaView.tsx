@@ -183,8 +183,14 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
     }
   };
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const listen = () => {
-    if (!Recognition) return;
+    if (!Recognition) {
+      say('Voice input needs Chrome or Edge. Type your question in the box below instead.', false);
+      inputRef.current?.focus();
+      return;
+    }
     if (light === 'listening') {
       recognition.current?.stop();
       return;
@@ -201,21 +207,38 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
       const done = parts.filter((r) => r.isFinal).map((r) => r[0].transcript);
       if (done.length) finalText = done.join(' ');
     };
-    rec.onerror = () => setLight('idle');
+    let failed = false;
+    rec.onerror = (e) => {
+      failed = true;
+      // Say why nothing happened instead of going quiet.
+      const why: Record<string, string> = {
+        'not-allowed': 'the browser blocked the microphone. Allow it with the icon in the address bar, or type below.',
+        'service-not-allowed': 'the browser blocked the microphone. Allow it with the icon in the address bar, or type below.',
+        'no-speech': "I didn't hear anything. Tap the microphone and speak, or type below.",
+        'audio-capture': 'no microphone was found. Type your question below instead.',
+        network: "the browser's speech service couldn't be reached. Type your question below instead.",
+      };
+      if (e.error !== 'aborted') say(`Sorry, ${why[e.error] ?? `voice input stopped (${e.error}). Type your question below instead.`}`, false);
+      else setLight('idle');
+    };
     rec.onend = () => {
       setHeard('');
       if (finalText) void ask(finalText, true);
-      else setLight('idle');
+      else if (!failed) say("I didn't hear anything. Tap the microphone and speak, or type below.", false);
     };
     recognition.current = rec;
     setLight('listening');
-    rec.start();
+    try {
+      rec.start();
+    } catch {
+      say('Voice input could not start. Type your question below instead.', false);
+    }
   };
 
   const lightLabel = { idle: 'Ready', listening: 'Listening…', thinking: 'Asking CodeLens…', speaking: 'Speaking', error: 'Something went wrong' }[light];
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:overflow-hidden">
+    <div className="grid h-full min-h-0 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       {/* The device */}
       <section className="flex min-h-0 flex-col gap-3" aria-label="Alexa+ simulator">
         <div className="flex flex-wrap items-center gap-2">
@@ -232,15 +255,21 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           </span>
         </div>
 
-        <div className="relative flex min-h-[380px] flex-1 flex-col overflow-hidden rounded-[2rem] border-[10px] border-slate-950 bg-gradient-to-br from-slate-900 via-[#0b1630] to-[#05202b] shadow-2xl shadow-cyan-950/40 ring-1 ring-white/10">
+        <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-[2rem] border-[10px] border-slate-950 bg-gradient-to-br from-slate-900 via-[#0b1630] to-[#05202b] shadow-2xl shadow-cyan-950/40 ring-1 ring-white/10">
           <div ref={conversation} className="min-h-0 flex-1 space-y-3 overflow-auto p-5" aria-live="polite">
             {turns.length === 0 && (
               <div className="cl-view-in flex h-full flex-col items-center justify-center gap-3 text-center">
-                <div className={`alexa-orb ${light}`} aria-hidden />
-                <p className="text-2xl font-semibold text-white">“Alexa, run my code.”</p>
+                <button
+                  className={`alexa-orb ${light} shrink-0 transition hover:scale-105 disabled:opacity-50`}
+                  onClick={listen}
+                  disabled={connected !== 'ok'}
+                  aria-label="Tap to speak to Alexa"
+                  title="Tap to speak"
+                />
+                <p className="text-xl font-semibold text-white">Tap the orb and say “Alexa, run my code.”</p>
                 <p className="max-w-md text-sm text-slate-400">
-                  Tap the microphone and speak, or type below. Alexa answers from the CodeLens trace: what ran, why it crashed, what a variable held, and a fix
-                  that is tested before you trust it.
+                  Or type below, or tap one of the suggestions. Alexa answers from the CodeLens trace: what ran, why it crashed, what a variable held, and a
+                  fix that is tested before you trust it.
                 </p>
               </div>
             )}
@@ -322,6 +351,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
             }}
           >
             <input
+              ref={inputRef}
               className="input flex-1 py-2.5 text-base"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
