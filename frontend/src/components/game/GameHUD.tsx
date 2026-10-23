@@ -195,7 +195,7 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
 
 export function Toasts({ game }: { game: Game }) {
   return (
-    <div className="pointer-events-none fixed bottom-4 left-4 z-50 flex flex-col gap-2" aria-live="polite">
+    <div className="pointer-events-none fixed bottom-20 left-4 z-50 flex flex-col gap-2" aria-live="polite">
       {game.toasts.map((t) => (
         <div
           key={t.id}

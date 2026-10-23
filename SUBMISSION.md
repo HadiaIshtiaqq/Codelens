@@ -60,6 +60,12 @@ In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the RE
     panel.
   - **Intent mapping:** each utterance becomes one tool call through a tested, rule-based mapper
     ([`frontend/src/lib/alexaIntents.ts`](frontend/src/lib/alexaIntents.ts)), so the demo works offline.
+  - **Lexi, Alexa's character** ([`frontend/src/components/Companion.tsx`](frontend/src/components/Companion.tsx)):
+    she speaks the answers and flies to the code page to point at the line an answer is about
+    ("show me the error", "where did it stop?").
+- **Before running:** "What does this program do?" explains the code in each view's own voice (Robo Lab,
+  Game, Classic) and warns about likely bugs, such as joining text and a number or a loop that never ends.
+- **Light and dark themes.**
 - **Grounding:** facts in every explanation come from the trace. When an AI model is used, its claims
   are checked against recorded line numbers, variable names and values before they are shown.
 - **Built with REA:** the turtle drawing stage was designed after using REA, the reverse-engineering toolkit
@@ -78,7 +84,7 @@ In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the RE
 The repository's whole history is from 22–23 October 2026 (`git log --date=short`); **[YOU]** confirm this falls
 inside the window. Highlights from the window:
 
-- **Sandboxed tracer:** step-by-step replay with Kids, Game and Classic views.
+- **Sandboxed tracer:** step-by-step replay with Robo Lab, Game and Classic views.
 - **MCP server:** 17 tools, with voice-ready speech output.
 - **Alexa+ simulator and browser MCP client:** with the `/mcp` endpoint served from the main app.
 - **Turtle drawing stage:** designed from the REA study of Scratch.
@@ -112,9 +118,9 @@ against what happened, a severity, the workaround and a suggestion.
 ## Demo video plan (under 3 minutes)
 
 1. **0:00–0:20.** The problem: beginners can't see what their code does, and error messages are scary.
-2. **0:20–1:20, Alexa+ simulator.** Load the "average" bug. Say "Alexa, run my code", "Why did it crash?", "What is
-   total?", "Fix it", "Test the fix", "Apply the fix". Point at the MCP traffic panel (`initialize`, `tools/call`)
-   and the protocol version.
+2. **0:20–1:20, Alexa+ simulator.** Load the "average" bug. Say "Alexa, run my code", then "Show me the error":
+   Lexi flies to the code and points at the line. Back on the device: "What is total?", "Fix it", "Test the fix",
+   "Apply the fix". Open "Show MCP traffic" to show `initialize` and `tools/call` and the protocol version.
 3. **1:20–2:10, Robo Lab.** Robo plays the "Draw a star" program. The turtle draws step by step, Robo explains each
    line, and the speaker is switched on.
 4. **2:10–2:40, Game mode.** Side-by-side code and cards board on a bigger program.
