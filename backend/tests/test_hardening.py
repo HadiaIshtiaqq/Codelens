@@ -65,3 +65,18 @@ def test_multiple_access_codes(client, monkeypatch):
     body = {"source_code": "x = 1\n"}
     for code, status in (("abc", 200), ("xyz", 200), ("judges:abc", 401), ("nope", 401)):
         assert client.post("/api/v1/executions", json=body, headers={"X-CodeLens-Access": code}).status_code == status
+
+
+def test_mcp_accepts_the_access_code_as_a_bearer_token(client, monkeypatch):
+    """Alexa+ and other MCP clients authenticate with `Authorization: Bearer <code>`."""
+    import app.main as main
+
+    locked = dataclasses.replace(get_settings(), access_code="judges:let-me-in")
+    monkeypatch.setattr(main, "get_settings", lambda: locked)
+    init = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
+    headers = {"Accept": "application/json, text/event-stream", "Host": "127.0.0.1:8000"}
+    refused = client.post("/mcp", json=init, headers=headers)
+    assert refused.status_code == 401 and refused.headers["www-authenticate"] == "Bearer"
+    assert client.post("/mcp", json=init, headers={**headers, "Authorization": "Bearer nope"}).status_code == 401
+    assert client.post("/mcp", json=init, headers={**headers, "Authorization": "Bearer let-me-in"}).status_code == 200

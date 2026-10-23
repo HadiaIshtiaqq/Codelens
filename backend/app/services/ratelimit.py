@@ -48,6 +48,21 @@ class RateLimiter:
         return allowed
 
 
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+def _client_ip(scope) -> str:
+    """The visitor's address. Behind a local proxy or tunnel (Caddy, cloudflared) every request comes from
+    loopback, so the proxy's forwarded address is used instead; it is only trusted from loopback."""
+    peer = (scope.get("client") or ("unknown", 0))[0]
+    if peer in _LOOPBACK or peer.startswith("172.") or peer.startswith("10."):  # host, or a proxy on the Docker network
+        headers = dict(scope.get("headers") or [])
+        forwarded = headers.get(b"cf-connecting-ip") or headers.get(b"x-forwarded-for", b"").split(b",")[0]
+        if forwarded.strip():
+            return forwarded.strip().decode("latin-1")
+    return peer
+
+
 class RateLimitMiddleware:
     """Pure ASGI middleware; reads the limiter from app.state so tests can swap it."""
 
@@ -57,7 +72,7 @@ class RateLimitMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http" and scope["method"] == "POST" and scope["path"].startswith(LIMITED_PREFIXES):
             limiter: Optional[RateLimiter] = getattr(scope["app"].state, "rate_limiter", None)
-            client = (scope.get("client") or ("unknown", 0))[0]
+            client = _client_ip(scope)
             wait = limiter.check(client) if limiter else 0.0
             if wait > 0:
                 body = json.dumps({"detail": f"Too many requests: try again in {math.ceil(wait)} s"}).encode()

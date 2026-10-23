@@ -1,8 +1,9 @@
 """Optional access code for hosted deployments.
 
-When CODELENS_ACCESS_CODE is set, every /api/* request must send it in the
-`X-CodeLens-Access` header, so strangers who find the URL cannot run code or
-spend AI credits. /health stays public so the UI can ask for the code.
+When CODELENS_ACCESS_CODE is set, every /api/* and /mcp request must send it, so
+strangers who find the URL cannot run code or spend AI credits: in the
+`X-CodeLens-Access` header (the web app) or as `Authorization: Bearer <code>`
+(MCP clients such as Alexa+). /health stays public so the UI can ask for the code.
 """
 
 import json
@@ -37,11 +38,16 @@ class AccessCodeMiddleware:
     async def __call__(self, scope, receive, send):
         codes = parse_codes(self._code_getter())
         if codes and scope["type"] == "http" and scope["path"].startswith(("/api/", "/mcp")) and scope["method"] != "OPTIONS":
-            sent = dict(scope.get("headers") or []).get(HEADER, b"")
-            if not any(secrets.compare_digest(sent, c.encode()) for c in codes.values()):
+            headers = dict(scope.get("headers") or [])
+            sent = headers.get(HEADER, b"")
+            bearer = headers.get(b"authorization", b"")
+            sent_bearer = bearer[7:].strip() if bearer[:7].lower() == b"bearer " else b""
+            ok = any(secrets.compare_digest(sent, c.encode()) or secrets.compare_digest(sent_bearer, c.encode())
+                     for c in codes.values())
+            if not ok:
                 body = json.dumps({"detail": "access code required"}).encode()
                 await send({"type": "http.response.start", "status": 401,
-                            "headers": [(b"content-type", b"application/json")]})
+                            "headers": [(b"content-type", b"application/json"), (b"www-authenticate", b"Bearer")]})
                 await send({"type": "http.response.body", "body": body})
                 return
         await self.app(scope, receive, send)

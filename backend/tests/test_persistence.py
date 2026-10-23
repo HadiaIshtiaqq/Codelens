@@ -66,3 +66,16 @@ def test_rate_limit_returns_429(client):
         assert client.get("/health").status_code == 200  # reads are never limited
     finally:
         app.state.rate_limiter = saved
+
+
+def test_rate_limit_counts_each_visitor_behind_a_tunnel():
+    from app.services.ratelimit import _client_ip
+
+    def scope(peer, **headers):
+        return {"client": (peer, 1), "headers": [(k.replace("_", "-").encode(), v.encode()) for k, v in headers.items()]}
+
+    assert _client_ip(scope("127.0.0.1", cf_connecting_ip="203.0.113.7")) == "203.0.113.7"
+    assert _client_ip(scope("127.0.0.1", x_forwarded_for="198.51.100.2, 10.0.0.1")) == "198.51.100.2"
+    assert _client_ip(scope("127.0.0.1")) == "127.0.0.1"
+    # A direct visitor can't pretend to be someone else.
+    assert _client_ip(scope("203.0.113.9", x_forwarded_for="1.2.3.4")) == "203.0.113.9"
