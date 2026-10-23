@@ -65,7 +65,26 @@ Every public option is locked with an **access code**, because visitors run code
 - **Judges:** send them a link that ends in `#access=<code>`. The code is saved and removed from the address bar.
 - **Alexa+ and other MCP clients:** they send the code as `Authorization: Bearer <code>` to `https://<host>/mcp`.
 
-### Option A: a public link from your own computer (one command)
+### Option A: a free permanent link on Hugging Face Spaces (one command, opens on any computer)
+
+1. Create a free account at [huggingface.co](https://huggingface.co/join) (no card needed).
+2. Create a token: [Settings → Access Tokens](https://huggingface.co/settings/tokens) → **Create new token** → type **Write**.
+3. Commit your changes, then run:
+
+```powershell
+.\scripts\deploy-hf.ps1        # asks for the token (hidden); deploys to <you>/codelens
+```
+
+The script:
+1. Creates the Space.
+2. Stores your `GEMINI_API_KEY` (from `backend\.env`) and a new access code as encrypted Space secrets.
+3. Uploads the committed code, and prints the judges' link.
+
+The Space builds for a few minutes and then stays on (it sleeps only after 48 hours without visitors). Run the script again after new commits to update it.
+
+Hugging Face can't start Docker containers, so programs run in the **subprocess sandbox**: a separate, memory-limited Python process with an empty environment. The server also makes itself non-dumpable, so user programs can't read its secrets through `/proc`; a test checks this. The access code keeps strangers out. For full container isolation, use option C.
+
+### Option B: a public link from your own computer (one command)
 
 Docker Desktop must be running and the sandbox image built (`scripts/setup.ps1` does both).
 
@@ -81,7 +100,7 @@ The script:
 
 It refuses to run without the Docker sandbox. The address changes every time it starts and lasts while your computer is on, so for a long judging period use option B.
 
-### Option B: a server (any Linux VM with Docker, 2 GB of RAM)
+### Option C: a server (any Linux VM with Docker, 2 GB of RAM)
 
 Free platforms like Render or Vercel can't start Docker containers, so they won't work.
 

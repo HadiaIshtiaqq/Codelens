@@ -1,5 +1,7 @@
 import asyncio
+import ctypes
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 import httpx
@@ -24,9 +26,23 @@ log = logging.getLogger("codelens")
 FRONTEND_DIST = PROJECT_DIR / "frontend" / "dist"
 
 
+def _hide_environment_from_user_code() -> None:
+    """Linux: make this process non-dumpable, so programs run by the subprocess sandbox (same user) can't
+    read its environment, which holds the API keys, through /proc/<pid>/environ."""
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        PR_SET_DUMPABLE = 4
+        if ctypes.CDLL(None, use_errno=True).prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0:
+            log.warning("could not hide the server environment (prctl failed)")
+    except OSError as exc:
+        log.warning("could not hide the server environment: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    _hide_environment_from_user_code()
     app.state.runner = build_runner(settings)
     app.state.stores = Stores(settings.store_max_entries, settings.db_path)
     app.state.rate_limiter = RateLimiter(settings.rate_limit_per_minute)
