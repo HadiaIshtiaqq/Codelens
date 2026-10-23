@@ -104,6 +104,7 @@ await check('kids: plain-word steps, idea cards, boxes', async () => {
   await page.getByRole('button', { name: '▶ Start' }).click();
   await page.getByText(/Step 1 of \d+/).waitFor({ timeout: 30000 });
   await page.getByRole('button', { name: /Next step/ }).click();
+  if ((await spoken()).length) throw new Error(`spoke before the speaker was switched on: ${JSON.stringify(await spoken())}`);
   if (!(await says()).includes('Make a train called pets with 3 cars: “cat”, “dog” and “fish”')) throw new Error(await says());
   await page.getByText('💡 New idea: A train of things').waitFor();
   await page.locator('text=car 0').first().waitFor(); // the board shows the result of the step

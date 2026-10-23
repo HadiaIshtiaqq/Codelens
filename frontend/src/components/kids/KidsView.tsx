@@ -15,7 +15,8 @@ import { KidBoard } from './KidBoard';
 // Blockly is large: load it only when a child switches to blocks.
 const KidsBlocks = lazy(() => import('./KidsBlocks').then((m) => ({ default: m.KidsBlocks })));
 
-const READ_ALOUD_KEY = 'codelens.kids.read-aloud';
+// A new key: the old one was saved as "on" without anyone choosing it. Robo only talks once the speaker is switched on.
+const READ_ALOUD_KEY = 'codelens.kids.speaker';
 const PACE_KEY = 'codelens.kids.pace';
 
 /** How Robo moves through the steps: on its own at some speed, or only when the child presses Next. */
@@ -34,9 +35,9 @@ function loadPace(): Pace {
 
 function loadReadAloud(): boolean {
   try {
-    return localStorage.getItem(READ_ALOUD_KEY) !== 'off';
+    return localStorage.getItem(READ_ALOUD_KEY) === 'on';
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -146,14 +147,17 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     if (pace === 'manual') setPlaying(false);
   }, [pace]);
 
-  useEffect(() => {
+  const toggleReadAloud = (on: boolean) => {
+    setReadAloud(on);
     try {
-      localStorage.setItem(READ_ALOUD_KEY, readAloud ? 'on' : 'off');
+      localStorage.setItem(READ_ALOUD_KEY, on ? 'on' : 'off');
     } catch {
       /* ignore */
     }
-    if (!readAloud) stopSpeaking();
-  }, [readAloud]);
+    if (!on) stopSpeaking();
+    // Before a run there is no step to read, so say hello to show the speaker works.
+    else if (!event) speak("Hi, I'm Robo! Press Start and I'll read each step to you.");
+  };
 
   // Read each step aloud; while playing, move on when the sentence has been read.
   useEffect(() => {
@@ -508,7 +512,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
                   {speechSupported && (
                     <div className="flex items-center gap-2">
                       <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-sky-700 px-2 py-1 text-sm font-semibold text-sky-100">
-                        <input type="checkbox" className="h-4 w-4" checked={readAloud} onChange={(e) => setReadAloud(e.target.checked)} />
+                        <input type="checkbox" className="h-4 w-4" checked={readAloud} onChange={(e) => toggleReadAloud(e.target.checked)} />
                         🔊 Read aloud
                       </label>
                       {readAloud && voices.length > 1 && (
