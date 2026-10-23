@@ -8,8 +8,9 @@ import { useDebugger } from './hooks/useDebugger';
 // Secondary tabs are split into their own chunks, so the debugger appears sooner.
 const ConverterView = lazy(() => import('./components/ConverterView').then((m) => ({ default: m.ConverterView })));
 const ReaView = lazy(() => import('./components/rea/ReaView').then((m) => ({ default: m.ReaView })));
+const AlexaView = lazy(() => import('./components/AlexaView').then((m) => ({ default: m.AlexaView })));
 
-type View = 'debugger' | 'convert' | 'rea';
+type View = 'debugger' | 'alexa' | 'convert' | 'rea';
 
 const loading = <p className="p-6 text-sm text-slate-500">Loading…</p>;
 
@@ -106,6 +107,7 @@ export default function App() {
 
   const tabs: [View, string][] = [
     ['debugger', '🎮 Python Debugger'],
+    ['alexa', '🔵 Alexa+'],
     ['convert', '🔄 Code Converter'],
     ...(showRea ? ([['rea', '🛡 Reverse Engineering']] as [View, string][]) : []),
   ];
@@ -165,6 +167,13 @@ export default function App() {
           }}
         />
       </div>
+      {visited.has('alexa') && (
+        <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'alexa'}>
+          <Suspense fallback={loading}>
+            <AlexaView dbg={dbg} onShowDebugger={() => setView('debugger')} />
+          </Suspense>
+        </div>
+      )}
       {visited.has('convert') && (
         <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'convert'}>
           <Suspense fallback={loading}>

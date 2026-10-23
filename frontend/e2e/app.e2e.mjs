@@ -369,6 +369,24 @@ await check('code converter tab loads', async () => {
   await page.getByText(/Paste code in any language|AI is offline/).first().waitFor();
   await page.getByRole('tab', { name: /Python Debugger/ }).click();
 });
+await check('Alexa+ simulator answers through the MCP server', async () => {
+  await load('def total(xs):\n    s = 0\n    for i in range(len(xs) + 1):\n        s += xs[i]\n    return s\n\nprint(total([1, 2, 3]))\n');
+  await page.getByRole('tab', { name: /Alexa/ }).click();
+  await page.getByText(/MCP connected · \d+ tools/).waitFor({ timeout: 20000 });
+  const ask = async (text, expected) => {
+    await page.getByLabel('Say something to Alexa').fill(text);
+    await page.getByRole('button', { name: 'Ask', exact: true }).click();
+    await page.getByText(expected).first().waitFor({ timeout: 30000 });
+  };
+  await ask('Alexa, run my code', /crashed with an IndexError on line 4/);
+  await ask('fix it', /I have a fix/);
+  await ask('test the fix', /apply the fix/);
+  await ask('apply the fix', /put the fixed code in your editor/);
+  const log = await page.getByTestId('mcp-log').innerText();
+  for (const method of ['initialize', 'tools/list', 'tools/call']) if (!log.includes(method)) throw new Error(`missing ${method} in the MCP log`);
+  await page.getByRole('tab', { name: /Python Debugger/ }).click();
+  await page.getByRole('radio', { name: /Game/ }).click();
+});
 await check('classic view', async () => {
   await page.getByRole('radio', { name: /Classic/ }).click();
   await page.getByText('Timeline').first().waitFor();
