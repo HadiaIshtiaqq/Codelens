@@ -57,27 +57,52 @@ Prerequisites: Python 3.11+, Node.js 22.19+ / 24.11+, and Docker Desktop (option
 
 `start.ps1` uses the Docker sandbox when the `codelens-worker:latest` image exists. Otherwise it falls back to the **subprocess** sandbox, which has **no container isolation** (only a memory cap) and is meant for local development only.
 
-## Hosting a public demo
+## Deploying for the hackathon
 
-Use any Linux VM with Docker (a small cloud VM with 2 GB of RAM is plenty). Free platforms like Render or Vercel can't start Docker containers, so they won't work.
+Every public option is locked with an **access code**, because visitors run code on your machine.
 
-```bash
-git clone <your repo> && cd codelens-ai
-cp backend/.env.example backend/.env    # set NEBIUS_API_KEY and CODELENS_ACCESS_CODE
-docker compose up -d --build            # http://<server-ip>:8000
+- **Judges:** send them a link that ends in `#access=<code>`. The code is saved and removed from the address bar.
+- **Alexa+ and other MCP clients:** they send the code as `Authorization: Bearer <code>` to `https://<host>/mcp`.
 
-# Automatic HTTPS (point a DNS name at the server first):
-CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d
+### Option A: a public link from your own computer (one command)
 
-# MCP endpoint for Alexa+ / remote agents (https://<host>:8765/mcp, Bearer token):
-CODELENS_MCP_TOKEN=<secret> CODELENS_MCP_PUBLIC_HOSTS=demo.example.com docker compose --profile mcp up -d
+Docker Desktop must be running and the sandbox image built (`scripts/setup.ps1` does both).
+
+```powershell
+.\scripts\go-public.ps1            # Windows
+./scripts/go-public.sh              # macOS / Linux (needs cloudflared)
 ```
 
-- **One image** contains the UI and the API. Every run still happens in its own network-less, read-only `codelens-worker` container, started through the host's Docker socket.
-- **Access codes:** set `CODELENS_ACCESS_CODE` so strangers can't spend your AI credits. Visitors are asked for the code once. Give each group its own code, for example `CODELENS_ACCESS_CODE=judges:abc123,team:xyz789`, so you can revoke one by removing it.
-- **Upgrading from a version before the non-root change:** the old data volume belongs to root. Run `docker compose down -v` once (this deletes stored runs) before `docker compose up -d --build`.
+The script:
+1. Opens a free HTTPS tunnel with no account needed. It tries a Cloudflare quick tunnel first, then falls back to localhost.run over SSH, which is built into Windows.
+2. Creates an access code.
+3. Starts the app and prints three things: the link for judges, the plain address with its code, and the Alexa+ endpoint.
+
+It refuses to run without the Docker sandbox. The address changes every time it starts and lasts while your computer is on, so for a long judging period use option B.
+
+### Option B: a server (any Linux VM with Docker, 2 GB of RAM)
+
+Free platforms like Render or Vercel can't start Docker containers, so they won't work.
+
+```bash
+git clone https://github.com/HadiaIshtiaqq/Codelens && cd Codelens
+export CODELENS_ACCESS_CODE="judges:$(openssl rand -hex 6)"   # required: compose won't start without it
+docker compose up -d --build                                   # http://<server-ip>:8000
+
+# Automatic HTTPS: point a DNS name at the server first. /mcp then answers on that name too.
+CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d --build
+```
+
+- **One image** contains the UI, the API and `/mcp`. Every run still happens in its own network-less, read-only `codelens-worker` container, started through the host's Docker socket.
+- **Access codes:** give each group its own code, for example `CODELENS_ACCESS_CODE=judges:abc123,team:xyz789`, so you can revoke one by removing it.
+- **Rate limits** count each visitor separately, even behind the HTTPS proxy or a tunnel.
 - **Non-root:** the app container runs as an unprivileged user. On Linux, pass the host's docker group: `DOCKER_GID=$(getent group docker | cut -d: -f3) docker compose up -d`.
+- **Upgrading from a version before the non-root change:** the old data volume belongs to root. Run `docker compose down -v` once (this deletes stored runs).
 - **Retention:** stored runs expire after 72 h (`CODELENS_RETENTION_HOURS`), and the 🗑 **delete run** button removes one immediately.
+
+### Connecting Alexa+
+
+Register the MCP server as **Streamable HTTP** at `https://<your-host>/mcp`, with the header `Authorization: Bearer <access code>`. The server negotiates MCP protocol 2025-11-25 or later and offers 17 tools; the six "voice" tools return a short `speech` answer. [`server.json`](server.json) describes the same endpoint for MCP registries; replace `YOUR_PUBLIC_HOST` with your host.
 
 ## Configuration
 

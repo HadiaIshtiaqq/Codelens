@@ -55,6 +55,19 @@ export function setAccessCode(code: string) {
 }
 
 let memoryCode = '';
+
+// A judge's link can carry the code (".../#access=CODE"): save it, then take it out of the address bar.
+(() => {
+  if (typeof window === 'undefined') return;
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  const code = hash.get('access');
+  if (!code) return;
+  setAccessCode(code);
+  hash.delete('access');
+  const rest = hash.toString();
+  window.history.replaceState(null, '', window.location.pathname + window.location.search + (rest ? `#${rest}` : ''));
+})();
+
 /** Fired when the server rejects the access code, so the app can ask for it. */
 export const ACCESS_DENIED_EVENT = 'codelens:access-denied';
 

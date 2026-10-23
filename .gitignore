@@ -17,3 +17,6 @@ backend/data/
 
 # Claude Code session settings (personal)
 .claude/
+
+# Downloaded helper tools (cloudflared) and tunnel logs
+tools/

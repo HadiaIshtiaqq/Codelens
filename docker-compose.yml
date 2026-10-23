@@ -30,6 +30,9 @@ services:
         required: false
     environment:
       CODELENS_SANDBOX: docker
+      # A hosted server runs strangers' code, so it must be locked: give judges this code (or a link
+      # ending in #access=<code>); Alexa+ sends it as "Authorization: Bearer <code>".
+      CODELENS_ACCESS_CODE: ${CODELENS_ACCESS_CODE:?set CODELENS_ACCESS_CODE, e.g. judges:some-long-secret}
       CODELENS_CORS_ORIGINS: ${CODELENS_CORS_ORIGINS:-http://localhost:8000}
       # /mcp (Alexa+ and the in-app simulator) answers to these host names; behind the https profile that's your domain.
       CODELENS_MCP_PUBLIC_HOSTS: ${CODELENS_MCP_PUBLIC_HOSTS:-${CODELENS_DOMAIN:-}}
