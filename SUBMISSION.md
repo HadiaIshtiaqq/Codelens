@@ -23,7 +23,7 @@ and **ask about it out loud**.
   out of range." "total is 247. Over the run it went: 0, then 90, then 162, then 247."
 - **See every step.** A sandbox records every line, call, return, exception and variable. The web app
   replays the run side by side with the code:
-  - **Kids mode:** a robot called Robo explains each step in plain words and reads them aloud.
+  - **Robo Lab:** a robot called Robo explains each step in plain words and reads them aloud.
   - **Game mode:** each variable gets its own card, with arrows between objects and a turtle drawing stage.
   - **Classic:** a conventional debugger view.
 - **Fix with evidence.** A fix is proposed as a diff and validated with real pytest in a fresh sandbox
@@ -32,7 +32,7 @@ and **ask about it out loud**.
 ## How it works
 
 ```
-Alexa+ / any MCP client ──Streamable HTTP──▶  /mcp  (MCP server, 18 tools)
+Alexa+ / any MCP client ──Streamable HTTP──▶  /mcp  (MCP server, 17 tools)
 In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the REST API in-process
                                                ▼
                                    FastAPI ── sandbox (Docker: no network, read-only,
@@ -43,7 +43,7 @@ In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the RE
                                       └─ pytest validation in a fresh sandbox
 ```
 
-- **MCP server** ([`backend/app/mcp_server.py`](backend/app/mcp_server.py)): 18 tools.
+- **MCP server** ([`backend/app/mcp_server.py`](backend/app/mcp_server.py)): 17 tools.
   - **Six voice-ready tools:** `explain_code`, `get_debugging_summary`, `get_variable_state`,
     `get_execution_state`, `propose_fix` and `validate_fix`. Each returns a short `speech` string with the
     structured data behind it.
@@ -69,7 +69,7 @@ In-app Alexa+ simulator ──Streamable HTTP──▶   │   tools call the RE
 **Testing:**
 - 149 backend tests, including MCP over Streamable HTTP end to end.
 - 20 frontend unit tests.
-- A headless-browser suite (`npm run e2e`) that drives Kids mode, Game mode, the turtle stage and the
+- A headless-browser suite (`npm run e2e`) that drives Robo Lab, Game mode, the turtle stage and the
   Alexa+ simulator.
 - GitHub Actions runs all three on every push.
 
@@ -79,17 +79,17 @@ The repository's whole history is from 22–23 October 2026 (`git log --date=sho
 inside the window. Highlights from the window:
 
 - **Sandboxed tracer:** step-by-step replay with Kids, Game and Classic views.
-- **MCP server:** 18 tools, with voice-ready speech output.
+- **MCP server:** 17 tools, with voice-ready speech output.
 - **Alexa+ simulator and browser MCP client:** with the `/mcp` endpoint served from the main app.
 - **Turtle drawing stage:** designed from the REA study of Scratch.
-- **Kids mode:** Robo, read-aloud, blocks, challenges, auto-play and the progress track.
+- **Robo Lab:** Robo, read-aloud, blocks, challenges, auto-play and the progress track.
 - **Evidence-checked fixes:** fix proposals with pytest validation.
 
 ## Product feedback (tools, APIs, SDKs used)
 
 | Tool | What we used it for | What worked well | What needs work | Again? |
 |---|---|---|---|---|
-| **MCP Python SDK** (`mcp` 2.3.0), Streamable HTTP | The CodeLens MCP server, 18 tools | Typed tools with structured output; protocol negotiation to 2025-11-25 and later worked first time; DNS-rebinding and origin protection are on by default | Mounting inside an existing FastAPI app: the session manager's `run()` works only once per instance, which broke our test suite until we rebuilt the endpoint for each app start (friction log M3). The 1.x → 2.x rename of `FastMCP` to `MCPServer` cost time (M1) | Yes |
+| **MCP Python SDK** (`mcp` 2.3.0), Streamable HTTP | The CodeLens MCP server, 17 tools | Typed tools with structured output; protocol negotiation to 2025-11-25 and later worked first time; DNS-rebinding and origin protection are on by default | Mounting inside an existing FastAPI app: the session manager's `run()` works only once per instance, which broke our test suite until we rebuilt the endpoint for each app start (friction log M3). The 1.x → 2.x rename of `FastMCP` to `MCPServer` cost time (M1) | Yes |
 | **Model Context Protocol** (spec) | Browser MCP client written from scratch | Small surface: four messages are enough for a useful client. Session ids and SSE responses are simple to handle | A minimal "client in 50 lines" example for the Streamable HTTP wire format would help people building simulators | Yes |
 | **Alexa+ (Developer Preview)** | Target platform for the MCP server | **[YOU]** Onboarding, console, how the MCP endpoint was registered | **[YOU]** | **[YOU]** |
 | **REA** (`rea-agents` 6.7.0) | Studying Scratch's engine; reverse-engineering tab | Evidence documents with stable ids; accurate `destructiveHint` annotations | Analysing a 25 MB package over MCP returned only "Error executing tool", with no reason or size hint (friction log R9) | Yes |
@@ -115,7 +115,7 @@ against what happened, a severity, the workaround and a suggestion.
 2. **0:20–1:20, Alexa+ simulator.** Load the "average" bug. Say "Alexa, run my code", "Why did it crash?", "What is
    total?", "Fix it", "Test the fix", "Apply the fix". Point at the MCP traffic panel (`initialize`, `tools/call`)
    and the protocol version.
-3. **1:20–2:10, Kids mode.** Robo plays the "Draw a star" program. The turtle draws step by step, Robo explains each
+3. **1:20–2:10, Robo Lab.** Robo plays the "Draw a star" program. The turtle draws step by step, Robo explains each
    line, and the speaker is switched on.
 4. **2:10–2:40, Game mode.** Side-by-side code and cards board on a bigger program.
 5. **2:40–3:00.** How to connect real Alexa+ to `https://<host>/mcp`, then the repo and license.

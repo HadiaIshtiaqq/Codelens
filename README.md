@@ -7,8 +7,8 @@ A Python debugging and reverse-engineering workspace:
   - Each question becomes a real MCP tool call over Streamable HTTP to the CodeLens MCP server (protocol 2025-11-25 or later).
   - The answer comes back as speech plus a visual card.
   - A live panel shows every MCP request and response.
-- **🐢 Turtle drawing:** `import turtle` works in the sandbox, and the picture is drawn step by step with the code, in Kids mode and on Game mode's Drawing board. It was designed after studying Scratch's pen and motion engine with REA ([`docs/REA_SCRATCH_STUDY.md`](docs/REA_SCRATCH_STUDY.md)).
-- **🧸 Kids mode (the default)**, built for an 8-year-old with no coding experience:
+- **🐢 Turtle drawing:** `import turtle` works in the sandbox, and the picture is drawn step by step with the code, in Robo Lab and on Game mode's Drawing board. It was designed after studying Scratch's pen and motion engine with REA ([`docs/REA_SCRATCH_STUDY.md`](docs/REA_SCRATCH_STUDY.md)).
+- **🤖 Robo Lab (the default view)**, built for an 8-year-old with no coding experience:
   - Every step is one plain sentence about what just happened: "📦 Make a new box called apples: 3", "🔁 Loop: take the next one from the pets box. pet is “dog”", "❓ Question: is the temperature box bigger than 25? Yes!".
   - Values are shown as labeled cardboard boxes, and lists as trains with numbered cars.
   - A **💡 New idea** card appears the first time each concept shows up (box, list, loop, if, trick…).
@@ -29,7 +29,6 @@ A Python debugging and reverse-engineering workspace:
 - **Long runs:** traces keep the first 300 and the most recent 700 steps, so the end of a long loop (and its crash) is always visible; skipped parts are marked.
 - **Share** any program, including its extra files and input, as a compressed link (it lives in the URL fragment, never on the server).
 - **Breakpoints:** click the gutter beside a line number. **⏩ Continue** (F8) jumps to the next time a breakpoint line runs and **⏪** (Shift+F8) jumps back. F9 toggles a breakpoint on the current line, and autoplay pauses at breakpoints.
-- **Convert code from any language** (JavaScript, Java, C/C++, C#, Go, Rust and 20+ more) to Python or between other languages with the AI, then press **🎮 Run & visualize** to watch it run. If you paste non-Python code into the debugger, it offers to convert it. Python output is checked to make sure it parses.
 - **Explain** failures with evidence-grounded AI. The facts are read from the trace, never invented by the model.
 - **Patch** the failure as a unified diff, then **validate** it with **real pytest** (fixtures, parametrize, `pytest.raises`) in a fresh sandbox. Starter tests are **generated from your run**: calls that worked become regression tests, and the call that crashed must stop crashing.
 - **Reverse engineer** JavaScript/Electron apps and native binaries with [REA](https://www.npmjs.com/package/rea-agents) (207 MCP tools). The tab is hidden by default; set `CODELENS_SHOW_REA=1` to show it. The REA API and MCP tools are always available.
@@ -124,12 +123,12 @@ If a configured provider fails or returns invalid JSON, the app falls back to th
 
 ## Using it from agents (MCP): Claude Code and Alexa+
 
-The CodeLens MCP server exposes 18 tools over the REST API:
+The CodeLens MCP server exposes 17 tools over the REST API:
 
 | Group | Tools |
 | --- | --- |
 | Conversational (voice-ready, each returns a short `speech` string) | `explain_code`, `get_execution_state`, `get_variable_state`, `get_debugging_summary`, `propose_fix`, `validate_fix` |
-| Debugging & conversion | `convert_code`, `run_python`, `get_trace`, `get_step_state`, `get_source`, `explain_execution`, `propose_patch`, `validate_patch` |
+| Debugging | `run_python`, `get_trace`, `get_step_state`, `get_source`, `explain_execution`, `propose_patch`, `validate_patch` |
 | Reverse engineering | `rea_analyze_javascript_application`, `rea_list_tools`, `rea_tool_schema`, `rea_call_tool` |
 
 - **Same server, `/mcp`:** the main app serves the MCP server at `http://<host>:8000/mcp` (Streamable HTTP), guarded like the REST API. The in-app Alexa+ simulator uses it. For a public deployment, set `CODELENS_ACCESS_CODE`, put the app behind HTTPS and list your domain in `CODELENS_MCP_PUBLIC_HOSTS`.
@@ -170,7 +169,6 @@ CI (`.github/workflows/ci.yml`) runs all three on every push, including the Dock
 | POST | `/api/v1/explanations` | Evidence-grounded explanation |
 | POST | `/api/v1/patches` · GET `/api/v1/patches/{id}` | Generate (or submit) a patch |
 | POST | `/api/v1/patches/validate` | Run tests against the patch in a sandbox |
-| POST | `/api/v1/convert` | Translate code between languages (Python output is syntax-checked) |
 | POST | `/api/v1/ai/selftest` | One real call to the configured provider (proves Nebius is live; shows latency) |
 | GET | `/api/v1/rea/status` · `/workspace` · `/tools` · `/tools/{name}` | REA readiness, workspace, tool catalogue |
 | POST | `/api/v1/rea/javascript` · `/api/v1/rea/tools/call` | JS/Electron analysis, any REA tool |
@@ -202,7 +200,7 @@ Still on you: hosting the demo (see above), the 3-minute videos, and sharing the
 ## Known limits
 
 - **One server process.** Storage is a SQLite file and rate limits live in memory, which is right for a demo or classroom server. Several replicas would need Postgres and Redis.
-- **Python only for simulation.** Other languages are simulated by converting them to Python with the AI, so you watch the converted program.
+- **Python only.** CodeLens runs and explains Python; code in other languages is recognised and the user is told to write it in Python.
 - **Sandbox libraries:** the standard library, numpy and pytest. Other packages would have to be added to `backend/worker/Dockerfile` (the network is off at run time).
 - **Per-run limits:** 5 s and up to 20,000 traced steps per run (`CODELENS_TRACE_BUDGET`). Longer programs keep running after tracing pauses, and their output and final crash are still recorded.
 - **No user accounts.** Progress lives in the browser and moves between devices with a progress code. Hosted demos are protected by shared, revocable access codes, not personal logins.
