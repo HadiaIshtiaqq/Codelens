@@ -382,6 +382,7 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
   await ask('fix it', /I have a fix/);
   await ask('test the fix', /apply the fix/);
   await ask('apply the fix', /put the fixed code in your editor/);
+  await page.getByRole('button', { name: 'Show MCP traffic' }).click(); // hidden by default
   const log = await page.getByTestId('mcp-log').innerText();
   for (const method of ['initialize', 'tools/list', 'tools/call']) if (!log.includes(method)) throw new Error(`missing ${method} in the MCP log`);
   await page.getByRole('tab', { name: /Python Debugger/ }).click();

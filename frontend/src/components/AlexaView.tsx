@@ -59,6 +59,8 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
   const [heard, setHeard] = useState('');
   const [typed, setTyped] = useState('');
   const [alwaysSpeak, setAlwaysSpeak] = useState(false);
+  // The MCP traffic panel is for developers (and demo videos); it stays hidden until asked for.
+  const [showTraffic, setShowTraffic] = useState(false);
   const [lastRun, setLastRun] = useState<{ execution_id: string; failed: boolean } | null>(null);
   const [lastPatch, setLastPatch] = useState<{ patch_id: string; patched_source: string } | null>(null);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
@@ -250,7 +252,9 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
         : [...(example ? [`What is ${example}?`] : []), 'Where did it stop?', 'Run my code'];
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 gap-4 overflow-auto p-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+    <div
+      className={`grid h-full min-h-0 grid-cols-1 gap-4 overflow-auto p-4 ${showTraffic ? 'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]' : 'mx-auto w-full max-w-4xl'}`}
+    >
       {/* The device */}
       <section className="flex min-h-[460px] min-w-0 flex-col gap-3 lg:min-h-0" aria-label="Alexa+ simulator">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -266,6 +270,13 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
             <span className={`h-1.5 w-1.5 rounded-full ${ready ? 'cl-pulse-dot bg-cyan-400 text-cyan-400/60' : connected === 'failed' ? 'bg-rose-400' : 'bg-slate-400'}`} />
             {ready ? `MCP connected · ${client.tools.length} tools` : connected === 'failed' ? 'MCP unavailable' : 'connecting…'}
           </span>
+          <button
+            className="rounded-full border border-white/10 px-2.5 py-0.5 text-xs text-slate-400 transition hover:border-white/20 hover:text-slate-200"
+            onClick={() => setShowTraffic(!showTraffic)}
+            aria-pressed={showTraffic}
+          >
+            {showTraffic ? 'Hide MCP traffic' : 'Show MCP traffic'}
+          </button>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] border-[8px] border-black bg-[#0a1424] shadow-2xl shadow-black/50 ring-1 ring-white/10">
@@ -411,6 +422,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
       </section>
 
       {/* The developer's view of the same conversation */}
+      {showTraffic && (
       <section className="panel min-h-[320px] min-w-0 overflow-hidden" aria-label="MCP traffic">
         <div className="panel-title">
           <span>MCP traffic · Streamable HTTP</span>
@@ -449,6 +461,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           Real Alexa+ connects to the same server: register <span className="font-mono text-slate-300">https://&lt;your-host&gt;/mcp</span>.
         </p>
       </section>
+      )}
     </div>
   );
 }
