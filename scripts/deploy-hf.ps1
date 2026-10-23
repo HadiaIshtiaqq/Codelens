@@ -11,14 +11,17 @@
 # Token: https://huggingface.co/settings/tokens -> "Create new token" -> type "Write".
 param([string]$Space = "codelens", [string]$AccessCode = "")
 $ErrorActionPreference = "Stop"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12  # Windows PowerShell 5.1 defaults to old TLS
 $root = Split-Path -Parent $PSScriptRoot
 $api = "https://huggingface.co/api"
 
 $token = $env:HF_TOKEN
 if (-not $token) {
     $secure = Read-Host "Hugging Face token (Write access; it is not shown or saved)" -AsSecureString
-    $token = [Runtime.InteropServices.Marshal]::PtrToStringAuth([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+    # Works in Windows PowerShell 5.1 and PowerShell 7.
+    $token = (New-Object System.Management.Automation.PSCredential("hf", $secure)).GetNetworkCredential().Password
 }
+$token = $token.Trim()
 $auth = @{ Authorization = "Bearer $token" }
 
 function Invoke-Hf($method, $path, $body) {
