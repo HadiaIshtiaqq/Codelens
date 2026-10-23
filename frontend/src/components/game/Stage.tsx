@@ -242,9 +242,13 @@ function Confetti() {
 
 /** Python-Tutor-style frames & objects view, presented as a game board. */
 export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay }: Props) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [arrows, setArrows] = useState<Arrow[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // "Fit" shrinks the whole board so it is visible at once; "full size" keeps 1:1 and scrolls.
+  const [fit, setFit] = useState(true);
+  const [scale, setScale] = useState(1);
   const [hideCallables, setHideCallables] = useState(true);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
 
@@ -258,6 +262,8 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
     if (!content) return;
     const draw = () => {
       const base = content.getBoundingClientRect();
+      // Rects are measured on screen (after scaling); the arrows are drawn in the board's own units.
+      const k = content.offsetWidth ? base.width / content.offsetWidth : 1;
       const next: Arrow[] = [];
       content.querySelectorAll<HTMLElement>('[data-target]').forEach((src) => {
         const targetId = src.dataset.target!;
@@ -265,11 +271,11 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
         if (!target) return;
         const s = src.getBoundingClientRect();
         const t = target.getBoundingClientRect();
-        const x1 = s.left + s.width / 2 - base.left;
-        const y1 = s.top + s.height / 2 - base.top;
+        const x1 = (s.left + s.width / 2 - base.left) / k;
+        const y1 = (s.top + s.height / 2 - base.top) / k;
         const leftward = t.left + 2 < s.left;
-        const x2 = (leftward ? t.right : t.left) - base.left + (leftward ? 2 : -2);
-        const y2 = t.top - base.top + 16;
+        const x2 = ((leftward ? t.right : t.left) - base.left) / k + (leftward ? 2 : -2);
+        const y2 = (t.top - base.top) / k + 16;
         const bend = Math.max(40, Math.abs(x2 - x1) * 0.4);
         const c1 = x1 + bend;
         const c2 = leftward ? x2 + bend : x2 - bend;
@@ -280,13 +286,31 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
         });
       });
       setArrows(next);
-      setSize({ w: content.scrollWidth, h: content.scrollHeight });
+      // The layout box, not scrollWidth/Height: those include the arrow layer itself and would only ever grow.
+      setSize({ w: content.offsetWidth, h: content.offsetHeight });
     };
     draw();
     const ro = new ResizeObserver(draw);
     ro.observe(content);
     return () => ro.disconnect();
-  }, [viz, order, activeFrameId]);
+  }, [viz, order, activeFrameId, scale]);
+
+  // Scale the board to fit the panel (never larger than 1:1, and not so small it can't be read).
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content) return;
+    const measure = () => {
+      if (!fit || !content.offsetWidth || !content.offsetHeight) return setScale(1);
+      const s = Math.min(1, viewport.clientWidth / content.offsetWidth, viewport.clientHeight / content.offsetHeight);
+      setScale(Math.max(0.45, Math.floor(s * 100) / 100));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(viewport);
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [fit, viz]);
 
   if (!viz && summary && (summary.error || summary.status !== 'completed')) {
     return (
@@ -334,7 +358,14 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
   const won = summary?.status === 'completed' && !summary.error;
 
   return (
-    <div className={`cl-stage-bg relative h-full overflow-auto ${crashedHere ? 'cl-shake-soft' : ''}`}>
+    <div ref={viewportRef} className={`cl-stage-bg relative h-full overflow-auto ${crashedHere ? 'cl-shake-soft' : ''}`}>
+      <button
+        className="sticky top-2 z-20 ml-auto mr-2 mt-2 block w-fit rounded-md border border-slate-600 bg-slate-900/90 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800"
+        onClick={() => setFit(!fit)}
+        title={fit ? 'Show the board at full size (scroll to see all of it)' : 'Shrink the board so all of it fits'}
+      >
+        {fit ? (scale < 1 ? `🔍 ${Math.round(scale * 100)}% · full size` : '🔍 full size') : '🔍 Fit to screen'}
+      </button>
       {crashedHere && event.event === 'exception' && (
         <div className="cl-pop sticky top-0 z-20 mx-auto w-fit rounded-b-xl bg-orange-600 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
           💥 {event.exception.type}: {event.exception.message} — line {event.line}
@@ -349,8 +380,15 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
       <p className="sr-only" aria-live="polite">
         {describeViz(viz)}
       </p>
-      {/* Narrow screens stack frames above objects; arrows are recomputed from the layout either way. */}
-      <div ref={contentRef} aria-hidden className="relative flex min-h-full flex-col items-start gap-10 p-4 pt-12 sm:min-w-fit sm:flex-row sm:gap-24 sm:p-5 sm:pt-12">
+      {/* Narrow screens stack frames above objects; arrows are recomputed from the layout either way.
+          The sizer takes the scaled size so the panel only scrolls when the board really is bigger. */}
+      <div className="-mt-8" style={{ width: size.w * scale || undefined, height: size.h * scale || undefined }}>
+      <div
+        ref={contentRef}
+        aria-hidden
+        className="relative flex w-max flex-col items-start gap-10 p-4 pt-12 sm:flex-row sm:gap-24 sm:p-5 sm:pt-12"
+        style={{ transform: scale < 1 ? `scale(${scale})` : undefined, transformOrigin: '0 0' }}
+      >
         <section aria-label="Call stack frames" className="flex w-full max-w-[300px] shrink-0 flex-col gap-3 sm:w-[300px]">
           <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Frames · where the robot is</h3>
           {viz.hidden_frames > 0 && (
@@ -372,9 +410,15 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
             </label>
           </div>
           {order.length === 0 && <p className="text-xs italic text-slate-500">No objects yet: only simple values so far.</p>}
-          {order.map((id) => (
-            <HeapCard key={id} id={id} obj={viz.heap[id]} viz={viz} />
-          ))}
+          {/* Many objects go into a few columns, so the board stays wide and short enough to see at once. */}
+          <div
+            className="grid items-start gap-4"
+            style={{ gridTemplateColumns: `repeat(${order.length > 6 ? Math.min(4, Math.ceil(Math.sqrt(order.length / 2))) : 1}, max-content)` }}
+          >
+            {order.map((id) => (
+              <HeapCard key={id} id={id} obj={viz.heap[id]} viz={viz} />
+            ))}
+          </div>
         </section>
 
         <svg className="pointer-events-none absolute left-0 top-0" width={size.w} height={size.h} aria-hidden>
@@ -401,6 +445,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay 
               />
             ))}
         </svg>
+      </div>
       </div>
 
       {endOverlay && (

@@ -317,6 +317,25 @@ await check('long run keeps the ending and marks the gap', async () => {
   await page.getByText(/steps skipped|line recording paused/).first().waitFor();
   await page.getByRole('radio', { name: /Game/ }).click();
 });
+await check('game: a big board shrinks to fit the panel', async () => {
+  const rooms = ['Home', 'School', 'Market', 'Park', 'Mall', 'Hospital', 'Zoo', 'Library', 'Pool', 'Farm', 'Beach', 'Museum', 'Cafe', 'Bank', 'Gym', 'Station'];
+  const graph = rooms.map((r, i) => `    '${r}': {'${rooms[(i + 1) % rooms.length]}': ${i + 1}},`).join('\n');
+  await load(`graph = {\n${graph}\n}\nfor place in graph:\n    print(place)\n`);
+  await run();
+  await status('EXIT 0');
+  await page.getByTitle('Last step (Alt+End)').click(); // every box exists by the end
+  await page.getByRole('button', { name: 'Keep exploring' }).click();
+  await page.getByRole('button', { name: /\d+% · full size/ }).waitFor();
+  const overflow = () =>
+    page.getByText('Frames · where the robot is').evaluate((el) => {
+      const v = el.closest('.cl-stage-bg');
+      return v.scrollHeight - v.clientHeight;
+    });
+  if ((await overflow()) > 2) throw new Error(`board still scrolls by ${await overflow()}px`);
+  await page.getByRole('button', { name: /full size/ }).click();
+  if ((await overflow()) <= 2) throw new Error('full size should be bigger than the panel');
+  await page.getByRole('button', { name: /Fit to screen/ }).click();
+});
 await check('delete run', async () => {
   await page.getByRole('button', { name: /delete run/ }).click();
   await page.getByRole('status').filter({ hasText: 'IDLE' }).waitFor();
