@@ -216,10 +216,10 @@ def _extract_json(content: str) -> dict[str, Any]:
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
     try:
         data = json.loads(text)
-    except ValueError:
+    except ValueError as exc:
         start, end = text.find("{"), text.rfind("}")
         if start < 0 or end <= start:
-            raise LLMError("model response contained no JSON object")
+            raise LLMError("model response contained no JSON object") from exc
         try:
             data = json.loads(text[start : end + 1])
         except ValueError as exc:

@@ -86,3 +86,8 @@ def test_endless_loop_is_flagged_before_running():
     warnings = explain_program("count = 10\nwhile count > 0:\n    count += 1\n", "game")["warnings"]
     assert warnings and "Endless loop on line 2" in warnings[0]["text"]
     assert explain_program("count = 10\nwhile count > 0:\n    count -= 1\n", "game")["warnings"] == []
+
+
+def test_a_number_turned_into_text_is_not_flagged():
+    src = 'total = 5\ntotal = str(total)\nprint("Total: " + total)\n'
+    assert explain_program(src, "classic")["warnings"] == []

@@ -59,6 +59,13 @@ export function CompanionLayer({ view, enabled, onGoAlexa }: { view: string; ena
   const focusedFor = useRef<Target | null>(null);
   const last = useRef(place);
 
+  // Leaving the code page ends the pointing, so Lexi doesn't point at an old line next time.
+  const previousView = useRef(view);
+  useEffect(() => {
+    if (previousView.current === 'debugger' && view !== 'debugger' && target) dismiss();
+    previousView.current = view;
+  }, [view, target, dismiss]);
+
   useEffect(() => {
     if (!enabled) return;
     const measure = () => {

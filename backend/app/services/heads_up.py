@@ -13,11 +13,27 @@ Level = Literal["kid", "game", "classic"]
 
 
 def _number_constants(tree: ast.Module) -> dict[str, tuple[Any, int]]:
-    """Module-level `name = <number>` assignments: name -> (value, line)."""
+    """Module-level `name = <number>` assignments: name -> (value, line).
+
+    Only names assigned exactly once anywhere, so `total = 5` then `total = str(total)` is not flagged.
+    """
+    assigned: dict[str, int] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AugAssign | ast.AnnAssign | ast.For):
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            for name in ast.walk(target):
+                if isinstance(name, ast.Name):
+                    assigned[name.id] = assigned.get(name.id, 0) + 1
     found: dict[str, tuple[Any, int]] = {}
     for node in tree.body:
         if (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.Constant) and type(node.value.value) in (int, float)):
+                and isinstance(node.value, ast.Constant) and type(node.value.value) in (int, float)
+                and assigned.get(node.targets[0].id) == 1):
             found[node.targets[0].id] = (node.value.value, node.lineno)
     return found
 

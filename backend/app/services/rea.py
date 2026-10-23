@@ -114,9 +114,9 @@ def run_cli(settings: Settings, args: list[str], timeout: float) -> dict[str, An
         stderr_lines = [ln for ln in err.read().decode("utf-8", "replace").splitlines() if "rea_progress" not in ln]
     try:
         data = json.loads(stdout)
-    except ValueError:
+    except ValueError as exc:
         detail = (stdout.strip() or "\n".join(stderr_lines))[-1500:]
-        raise ReaError(f"REA exited {proc.returncode} without JSON output: {detail}")
+        raise ReaError(f"REA exited {proc.returncode} without JSON output: {detail}") from exc
     if proc.returncode != 0 and isinstance(data, dict) and ("error" in data or "code" in data):
         raise ReaError(f"REA error: {json.dumps(data)[:1500]}", 422)
     return data
