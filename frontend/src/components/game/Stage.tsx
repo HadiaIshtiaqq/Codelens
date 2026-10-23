@@ -1,10 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ExecutionResponse, HeapObject, TraceEvent, VizFrame, VizSnapshot, VizValue } from '../../api/types';
 import { aliasesOf, describeViz, heapOrder, isRef } from '../../lib/viz';
 import { TurtleStage } from '../TurtleStage';
 import { CardsBoard } from './CardsBoard';
 
-export type BoardView = 'cards' | 'arrows' | 'drawing';
+export type BoardView = 'cards' | 'arrows' | 'drawing' | 'ai';
 
 interface Props {
   viz: VizSnapshot | null;
@@ -21,6 +21,8 @@ interface Props {
   /** The run's events when the program draws with turtle (adds the Drawing view). */
   drawingEvents: TraceEvent[] | null;
   drawingUpto: number;
+  /** The AI coach (explain · fix · test), shown as a tab like in Classic. */
+  aiPanel: ReactNode;
 }
 
 interface Arrow {
@@ -252,7 +254,7 @@ function Confetti() {
 }
 
 /** Python-Tutor-style frames & objects view, presented as a game board. */
-export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay, view, onView, changed, drawingEvents, drawingUpto }: Props) {
+export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay, view, onView, changed, drawingEvents, drawingUpto, aiPanel }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [arrows, setArrows] = useState<Arrow[]>([]);
@@ -323,9 +325,48 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
     return () => ro.disconnect();
   }, [fit, viz, view]);
 
+  // The same tab row as Classic: the board styles, and the AI coach.
+  const tabs: [BoardView, string, string][] = [
+    ['cards', '🃏 Cards', 'Each variable on a card with its value written out'],
+    ['arrows', '🔗 Arrows', 'Objects as boxes, with arrows from the variables that point at them'],
+    ...(drawingEvents ? ([['drawing', '🐢 Drawing', 'What the turtle has drawn so far']] as [BoardView, string, string][]) : []),
+    ['ai', '🧠 AI coach', 'Explain the failure, propose a fix and test it'],
+  ];
+  const header = (
+    <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-slate-800 bg-slate-950/60 px-2 py-1.5">
+      <div role="tablist" aria-label="Board" className="flex flex-wrap gap-1">
+        {tabs.map(([v, label, title]) => (
+          <button key={v} role="tab" aria-selected={view === v} className="tab py-1 text-xs" onClick={() => onView(v)} title={title}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'arrows' && (
+        <button
+          className="ml-auto rounded-md border border-slate-600 bg-slate-900/90 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800"
+          onClick={() => setFit(!fit)}
+          title={fit ? 'Show the board at full size (scroll to see all of it)' : 'Shrink the board so all of it fits'}
+        >
+          {fit ? (scale < 1 ? `🔍 ${Math.round(scale * 100)}% · full size` : '🔍 full size') : '🔍 Fit to screen'}
+        </button>
+      )}
+    </div>
+  );
+
+  if (view === 'ai') {
+    return (
+      <div className="flex h-full flex-col">
+        {header}
+        <div className="min-h-0 flex-1 [&>*]:h-full">{aiPanel}</div>
+      </div>
+    );
+  }
+
   if (!viz && summary && (summary.error || summary.status !== 'completed')) {
     return (
-      <div className="cl-stage-bg flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <div className="flex h-full flex-col">
+      {header}
+      <div className="cl-stage-bg flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
         <div className="cl-shake text-6xl">💥</div>
         <p className="text-2xl font-black text-orange-300">The robot couldn&apos;t even start!</p>
         <p className="max-w-lg font-mono text-sm text-slate-300">
@@ -348,18 +389,22 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
           </button>
         )}
       </div>
+      </div>
     );
   }
 
   if (!viz) {
     return (
-      <div className="cl-stage-bg flex h-full flex-col items-center justify-center gap-3 text-center">
+      <div className="flex h-full flex-col">
+      {header}
+      <div className="cl-stage-bg flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
         <div className="cl-bob text-6xl">🤖</div>
         <p className="text-lg font-semibold">Press ▶ Run Code to start the game</p>
         <p className="max-w-md text-sm text-slate-400">
           Your program becomes a board: every function call is a room, every list, dict and object is a box, and arrows show which
           variables point at which objects.
         </p>
+      </div>
       </div>
     );
   }
@@ -370,43 +415,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
 
   return (
     <div className={`cl-stage-bg relative flex h-full flex-col ${crashedHere ? 'cl-shake-soft' : ''}`}>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800/80 bg-slate-950/50 px-3 py-1.5">
-        <div role="radiogroup" aria-label="Board style" className="flex overflow-hidden rounded-md border border-slate-700 text-xs">
-          {(
-            [
-              ['cards', '🃏 Cards'],
-              ['arrows', '🔗 Arrows'],
-              ...(drawingEvents ? ([['drawing', '🐢 Drawing']] as const) : []),
-            ] as const
-          ).map(([v, label]) => (
-            <button
-              key={v}
-              role="radio"
-              aria-checked={view === v}
-              onClick={() => onView(v)}
-              className={`px-2.5 py-1 font-semibold ${view === v ? 'bg-cyan-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
-              title={
-                v === 'cards'
-                  ? 'Each variable on a card with its value written out'
-                  : v === 'arrows'
-                    ? 'Objects as boxes, with arrows from the variables that point at them'
-                    : "What the turtle has drawn so far"
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {view === 'arrows' && (
-          <button
-            className="ml-auto rounded-md border border-slate-600 bg-slate-900/90 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800"
-            onClick={() => setFit(!fit)}
-            title={fit ? 'Show the board at full size (scroll to see all of it)' : 'Shrink the board so all of it fits'}
-          >
-            {fit ? (scale < 1 ? `🔍 ${Math.round(scale * 100)}% · full size` : '🔍 full size') : '🔍 Fit to screen'}
-          </button>
-        )}
-      </div>
+      {header}
       {crashedHere && event.event === 'exception' && (
         <div className="cl-pop mx-auto mt-2 w-fit shrink-0 rounded-xl bg-orange-600 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
           💥 {event.exception.type}: {event.exception.message} — line {event.line}

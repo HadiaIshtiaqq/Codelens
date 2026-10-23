@@ -53,7 +53,6 @@ export function DebuggerView({ dbg }: Props) {
   const { run, step, stale, activeFile } = dbg;
   const [mode, setMode] = useState<Mode>(loadMode);
   const [reveal, setReveal] = useState<{ line: number; nonce: number } | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
   const [classicTab, setClassicTab] = useState<'vars' | 'stack' | 'timeline' | 'ai'>('vars');
   const [explainAll, setExplainAll] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -336,7 +335,7 @@ export function DebuggerView({ dbg }: Props) {
               )}
               {gapNote && <p className="mt-1 text-xs text-slate-400">{gapNote}</p>}
             </div>
-            <div className="min-h-[220px] flex-1">
+            <div className="min-h-0 flex-1">
               <Stage
                 viz={viz}
                 event={event}
@@ -344,11 +343,11 @@ export function DebuggerView({ dbg }: Props) {
                 isLast={!!run && !stale && step === events.length - 1}
                 onReplay={() => dbg.goTo(0)}
                 onExplain={() => {
-                  setAiOpen(true);
+                  chooseBoard('ai');
                   dbg.explain(null, null);
                 }}
                 onFix={async () => {
-                  setAiOpen(true);
+                  chooseBoard('ai');
                   await dbg.generatePatch();
                 }}
                 view={boardView}
@@ -356,18 +355,8 @@ export function DebuggerView({ dbg }: Props) {
                 changed={changed}
                 drawingEvents={draws && !stale ? events : null}
                 drawingUpto={step}
+                aiPanel={aiPanel}
               />
-            </div>
-            <div className="shrink-0 border-t border-slate-800">
-              <button
-                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 hover:bg-slate-800"
-                onClick={() => setAiOpen(!aiOpen)}
-                aria-expanded={aiOpen}
-              >
-                <span>🧠 AI coach: explain · fix · test {dbg.patch ? `· patch ${dbg.patch.status}` : ''}</span>
-                <span>{aiOpen ? '▼' : '▲'}</span>
-              </button>
-              {aiOpen && <div className="h-[38vh] max-h-[340px] min-h-[200px]">{aiPanel}</div>}
             </div>
           </div>
         </div>

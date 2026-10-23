@@ -228,12 +228,12 @@ await check('board: frames, objects, arrows, aliasing', async () => {
   await page.getByText(/shared by .*scores/).first().waitFor();
 });
 await check('game: cards board writes each variable out', async () => {
-  await page.getByRole('radio', { name: /Cards/ }).click();
+  await page.getByRole('tab', { name: /Cards/ }).click();
   const cards = page.getByTestId('cards-board');
   await cards.getByText(/Inside average\(\)/).waitFor();
   await cards.locator('[data-var="xs"]').waitFor();
   await cards.locator('[data-var="xs"]').getByText(/same object as scores/).waitFor(); // aliasing across frames
-  await page.getByRole('radio', { name: /Arrows/ }).click();
+  await page.getByRole('tab', { name: /Arrows/ }).click();
   await page.getByText('Frames · where the robot is').waitFor();
 });
 await check('screen-reader description of the board', async () => {
@@ -292,7 +292,7 @@ await check('game over, replay and autoplay', async () => {
   await page.getByRole('button', { name: '↺ Replay' }).click();
   await page.getByLabel('Playback speed').selectOption('fast'); // the shared player in the toolbar
   await page.getByRole('button', { name: '▶ Play' }).click();
-  await page.waitForTimeout(1500);
+  for (let i = 0; i < 40 && Number(await page.locator('#step-slider').inputValue()) < 5; i++) await page.waitForTimeout(150);
   if (Number(await page.locator('#step-slider').inputValue()) < 5) throw new Error('autoplay did not advance');
   await page.getByRole('button', { name: /Pause/ }).click().catch(() => {});
 });
@@ -306,7 +306,7 @@ await check('predict mode', async () => {
   await page.getByRole('button', { name: /Predict mode ON/ }).click();
 });
 await check('generated tests from the run', async () => {
-  await page.getByRole('button', { name: /AI coach/ }).click();
+  await page.getByRole('tab', { name: /AI coach/ }).click(); // a tab beside the board, as in Classic
   await page.getByRole('tab', { name: /Test Results/ }).click();
   await page.locator('.monaco-editor', { hasText: 'Generated from your last run' }).first().waitFor({ timeout: 10000 });
   await page.locator('.monaco-editor', { hasText: 'def test_average_does_not_crash' }).first().waitFor();
