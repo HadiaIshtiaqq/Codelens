@@ -166,6 +166,14 @@ await check('kids: progress track and arrow keys move Robo', async () => {
   await page.keyboard.press('ArrowLeft');
   await page.getByText(/Step 2 of \d+/).waitFor();
 });
+await check('kids: the turtle draws step by step', async () => {
+  await page.getByLabel('Pick a program').selectOption('square');
+  await page.getByRole('button', { name: '▶ Start' }).click();
+  await page.getByText(/Step 1 of \d+/).waitFor({ timeout: 30000 });
+  await page.getByTestId('turtle-stage').waitFor();
+  for (let i = 0; i < 10 && !(await says()).includes('🐢 Walk forward 120 steps'); i++) await page.getByRole('button', { name: /Next step/ }).click();
+  await page.getByText(/· 1 marks/).waitFor(); // the stage shows what the step does: the first side of the square
+});
 await check('kids: gentle oops', async () => {
   await page.getByLabel('Pick a program').selectOption('bug');
   await page.getByRole('button', { name: '▶ Start' }).click();

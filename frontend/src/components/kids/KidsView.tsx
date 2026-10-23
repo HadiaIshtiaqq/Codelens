@@ -6,10 +6,12 @@ import { CHALLENGES, type Challenge, type ChallengeResult } from '../../lib/chal
 import { exportProgress, importProgress, loadLearned, loadStars, saveLearned, saveStars } from '../../lib/progress';
 import { chooseVoice, chosenVoiceName, englishVoices, onVoicesChanged, speak, speechSupported, stopSpeaking } from '../../lib/speech';
 import { changedVariables, stdoutUpTo } from '../../lib/trace';
+import { hasDrawing } from '../../lib/turtle';
 import { vizAt } from '../../lib/viz';
 import { useCodeExplanation } from '../../hooks/useCodeExplanation';
 import { CodeEditor } from '../CodeEditor';
 import { ProgramPlan } from '../ProgramPlan';
+import { TurtleStage } from '../TurtleStage';
 import { KidBoard } from './KidBoard';
 
 // Blockly is large: load it only when a child switches to blocks.
@@ -80,6 +82,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
   const viz = useMemo(() => (run && !stale ? vizAt(events, boardStep) : null), [run, events, boardStep, stale]);
   const changed = useMemo(() => (run ? changedVariables(events, boardStep) : new Set<string>()), [run, events, boardStep]);
   const screen = useMemo(() => (run ? stdoutUpTo(events, step) : ''), [run, events, step]);
+  const draws = useMemo(() => hasDrawing(events), [events]);
   const sentence = event?.kid_narration ?? event?.narration ?? '';
   const kidFile = event?.file && event.file !== 'main.py' && event.file in dbg.files ? event.file : 'main.py';
   const crashed = event?.event === 'exception';
@@ -603,6 +606,17 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
               </div>
             </div>
           </section>
+
+          {draws && run && !stale && (
+            <section className="cl-pop rounded-3xl border-4 border-emerald-400 bg-emerald-950/40 p-3" aria-labelledby="drawing-title">
+              <h2 id="drawing-title" className="mb-2 text-xl font-black text-emerald-200">
+                🎨 The turtle&apos;s drawing
+              </h2>
+              <div className="h-[340px]">
+                <TurtleStage events={events} upto={boardStep} />
+              </div>
+            </section>
+          )}
 
           {concept && event?.concept && (
             <section className="cl-pop rounded-3xl border-4 border-yellow-300 bg-yellow-950/60 p-4 shadow-xl" aria-labelledby="idea-title">

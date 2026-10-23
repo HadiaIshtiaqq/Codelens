@@ -120,7 +120,7 @@ def _render(val, max_len, max_items, max_depth, seen):
 
             # Well-known numeric libraries have trustworthy, bounded reprs (e.g. numpy arrays).
             module = getattr(type(val), "__module__", "") or ""
-            if module.split(".")[0] in ("numpy", "pandas", "decimal", "fractions", "datetime", "collections"):
+            if module.split(".")[0] in ("numpy", "pandas", "decimal", "fractions", "datetime", "collections", "codelens_turtle"):
                 text = repr(val)
                 return text if len(text) <= MAX_VALUE_CHARS else text[: MAX_VALUE_CHARS - 3] + "..."
 
@@ -585,6 +585,306 @@ def _install_input(rec, text):
     builtins.input = _input
 
 
+# --------------------------------------------------------------------------- #
+# turtle: drawing without a window
+# --------------------------------------------------------------------------- #
+#
+# The sandbox has no display, so `import turtle` gets this stand-in. It follows the
+# standard turtle rules (origin in the centre, y up, heading 0 = east, left() turns
+# anticlockwise) and records every move as a small drawing op on the trace event of the
+# line that made it, so the UI can replay the picture step by step.
+
+MAX_DRAW_OPS = 20_000
+_COLOR_NAMES_OK = frozenset("abcdefghijklmnopqrstuvwxyz0123456789 ")
+
+
+def _css_color(args, colormode):
+    """turtle colour arguments -> a CSS colour string (names, '#hex', (r, g, b))."""
+    if len(args) == 1:
+        args = args[0]
+        if isinstance(args, str):
+            text = args.strip().lower()
+            if text.startswith("#") or set(text) <= _COLOR_NAMES_OK:
+                return text.replace(" ", "")
+            raise ValueError(f"bad color string: {args!r}")
+    if isinstance(args, (tuple, list)) and len(args) == 3:
+        parts = [float(v) for v in args]
+        if colormode == 1.0:
+            if not all(0 <= v <= 1 for v in parts):
+                raise ValueError(f"bad color sequence: {tuple(args)!r} (colors go from 0 to 1; use colormode(255) for 0-255)")
+            parts = [v * 255 for v in parts]
+        elif not all(0 <= v <= 255 for v in parts):
+            raise ValueError(f"bad color sequence: {tuple(args)!r}")
+        return "rgb({},{},{})".format(*(round(v) for v in parts))
+    raise ValueError(f"bad color arguments: {args!r}")
+
+
+def _make_turtle_module(rec):
+    import math
+
+    mod = types.ModuleType("turtle")
+    mod.__file__ = "<codelens turtle>"
+    state = {"ops": 0, "colormode": 1.0, "next_id": 0}
+
+    def record(op):
+        if state["ops"] >= MAX_DRAW_OPS:
+            rec.extra["drawing_truncated"] = True
+            return
+        ev = rec.last()
+        if ev is None:
+            return
+        state["ops"] += 1
+        ev.setdefault("draw", []).append(op)
+
+    class Turtle:
+        # No __dict__: the boxes show the short description below, not the turtle's insides.
+        __slots__ = ("_id", "_x", "_y", "_heading", "_down", "_pencolor", "_fillcolor", "_width", "_visible", "_fill")
+
+        def __repr__(self):
+            return f"<turtle at ({self._x:.0f}, {self._y:.0f}) facing {self._heading:.0f}°{'' if self._down else ', pen up'}>"
+
+        def __init__(self, shape="classic", visible=True):
+            self._id = state["next_id"]
+            state["next_id"] += 1
+            self._x = self._y = 0.0
+            self._heading = 0.0
+            self._down = True
+            self._pencolor = "black"
+            self._fillcolor = "black"
+            self._width = 1
+            self._visible = visible
+            self._fill = None
+            record({"k": "new", "t": self._id})
+
+        # -- movement --------------------------------------------------------
+        def _move_to(self, x, y):
+            x, y = float(x), float(y)
+            if self._fill is not None:
+                self._fill.append([round(x, 2), round(y, 2)])
+            self._x, self._y = x, y
+            record({"k": "mv", "t": self._id, "x": round(x, 2), "y": round(y, 2), "h": round(self._heading, 2),
+                    "d": self._down, "c": self._pencolor, "w": self._width})
+
+        def forward(self, distance):
+            rad = math.radians(self._heading)
+            self._move_to(self._x + float(distance) * math.cos(rad), self._y + float(distance) * math.sin(rad))
+
+        def backward(self, distance):
+            self.forward(-float(distance))
+
+        def _turn(self, angle):
+            self._heading = (self._heading + float(angle)) % 360
+            record({"k": "mv", "t": self._id, "x": round(self._x, 2), "y": round(self._y, 2), "h": round(self._heading, 2), "d": False})
+
+        def left(self, angle):
+            self._turn(angle)
+
+        def right(self, angle):
+            self._turn(-float(angle))
+
+        def goto(self, x, y=None):
+            if y is None:
+                x, y = x
+            self._move_to(x, y)
+
+        def setx(self, x):
+            self._move_to(x, self._y)
+
+        def sety(self, y):
+            self._move_to(self._x, y)
+
+        def setheading(self, angle):
+            self._turn(float(angle) - self._heading)
+
+        def home(self):
+            self._move_to(0, 0)
+            self.setheading(0)
+
+        def circle(self, radius, extent=None, steps=None):
+            radius = float(radius)
+            extent = 360.0 if extent is None else float(extent)
+            if steps is None:
+                steps = max(4, min(120, int(abs(extent) / 6) + 1))
+            step_angle = extent / steps
+            chord = 2 * radius * math.sin(math.radians(step_angle / 2))
+            self._turn(step_angle / 2 if radius >= 0 else -step_angle / 2)
+            for i in range(int(steps)):
+                rad = math.radians(self._heading)
+                self._move_to(self._x + chord * math.cos(rad), self._y + chord * math.sin(rad))
+                if i < steps - 1:
+                    self._turn(step_angle if radius >= 0 else -step_angle)
+            self._turn(step_angle / 2 if radius >= 0 else -step_angle / 2)
+
+        def dot(self, size=None, *color):
+            c = _css_color(color, state["colormode"]) if color else self._pencolor
+            record({"k": "dot", "x": round(self._x, 2), "y": round(self._y, 2), "r": float(size or max(self._width + 4, self._width * 2)), "c": c})
+
+        def stamp(self):
+            record({"k": "stamp", "t": self._id, "x": round(self._x, 2), "y": round(self._y, 2), "h": round(self._heading, 2), "c": self._fillcolor})
+
+        def write(self, arg, move=False, align="left", font=("Arial", 8, "normal")):
+            size = font[1] if isinstance(font, (tuple, list)) and len(font) > 1 else 8
+            record({"k": "text", "x": round(self._x, 2), "y": round(self._y, 2), "s": str(arg)[:200], "c": self._pencolor, "a": align, "f": size})
+
+        # -- pen ---------------------------------------------------------------
+        def penup(self):
+            self._down = False
+
+        def pendown(self):
+            self._down = True
+
+        def isdown(self):
+            return self._down
+
+        def pensize(self, width=None):
+            if width is None:
+                return self._width
+            self._width = max(0.1, float(width))
+
+        def pencolor(self, *args):
+            if not args:
+                return self._pencolor
+            self._pencolor = _css_color(args, state["colormode"])
+
+        def fillcolor(self, *args):
+            if not args:
+                return self._fillcolor
+            self._fillcolor = _css_color(args, state["colormode"])
+
+        def color(self, *args):
+            if not args:
+                return self._pencolor, self._fillcolor
+            if len(args) == 2:
+                self.pencolor(args[0])
+                self.fillcolor(args[1])
+            else:
+                self.pencolor(*args)
+                self.fillcolor(*args)
+
+        def begin_fill(self):
+            self._fill = [[round(self._x, 2), round(self._y, 2)]]
+
+        def end_fill(self):
+            if self._fill and len(self._fill) > 2:
+                record({"k": "fill", "pts": self._fill[:2000], "c": self._fillcolor})
+            self._fill = None
+
+        def filling(self):
+            return self._fill is not None
+
+        # -- state -------------------------------------------------------------
+        def position(self):
+            return (round(self._x, 2), round(self._y, 2))
+
+        def xcor(self):
+            return round(self._x, 2)
+
+        def ycor(self):
+            return round(self._y, 2)
+
+        def heading(self):
+            return round(self._heading, 2)
+
+        def distance(self, x, y=None):
+            if y is None:
+                x, y = x
+            return math.hypot(float(x) - self._x, float(y) - self._y)
+
+        def towards(self, x, y=None):
+            if y is None:
+                x, y = x
+            return math.degrees(math.atan2(float(y) - self._y, float(x) - self._x)) % 360
+
+        def hideturtle(self):
+            self._visible = False
+            record({"k": "vis", "t": self._id, "v": False})
+
+        def showturtle(self):
+            self._visible = True
+            record({"k": "vis", "t": self._id, "v": True})
+
+        def isvisible(self):
+            return self._visible
+
+        def clear(self):
+            record({"k": "clear", "t": self._id})
+
+        def reset(self):
+            self.clear()
+            self._down, self._pencolor, self._fillcolor, self._width = True, "black", "black", 1
+            self.home()
+
+        def speed(self, speed=None):
+            return 3 if speed is None else None  # the replay controls the speed
+
+        def shape(self, name=None):
+            return "turtle" if name is None else None
+
+        def shapesize(self, *args, **kwargs):
+            return None
+
+        def getscreen(self):
+            return _screen
+
+        # Short names, as in the standard module.
+        fd, bk, back, lt, rt = forward, backward, backward, left, right
+        setpos = setposition = goto
+        seth = setheading
+        pu = up = penup
+        pd = down = pendown
+        width = pensize
+        pos = position
+        ht, st = hideturtle, showturtle
+
+    class _Screen:
+        def bgcolor(self, *args):
+            if args:
+                record({"k": "bg", "c": _css_color(args, state["colormode"])})
+
+        def colormode(self, mode=None):
+            if mode is None:
+                return state["colormode"]
+            if mode not in (1, 1.0, 255):
+                raise ValueError("colormode must be 1.0 or 255")
+            state["colormode"] = 255 if mode == 255 else 1.0
+
+        def _noop(self, *args, **kwargs):
+            return None
+
+        setup = title = tracer = update = mainloop = done = exitonclick = bye = listen = onkey = onclick = ontimer = delay = _noop
+
+        def window_width(self):
+            return 480
+
+        def window_height(self):
+            return 360
+
+    _screen = _Screen()
+    _default = []
+
+    def _pen():
+        if not _default:
+            _default.append(Turtle())
+        return _default[0]
+
+    Turtle.__module__ = "codelens_turtle"  # safe_value trusts its short repr
+    mod.Turtle = mod.Pen = mod.RawTurtle = Turtle
+    mod.Screen = lambda: _screen
+    mod.TurtleScreen = _Screen
+    for name in ("bgcolor", "colormode", "setup", "title", "tracer", "update", "mainloop", "done", "exitonclick", "bye",
+                 "listen", "onkey", "onclick", "ontimer", "delay", "window_width", "window_height"):
+        setattr(mod, name, getattr(_screen, name))
+    turtle_methods = [n for n in vars(Turtle) if not n.startswith("_")]
+    for name in turtle_methods:
+        setattr(mod, name, (lambda n: lambda *a, **k: getattr(_pen(), n)(*a, **k))(name))
+    mod.__all__ = sorted(set(turtle_methods) | {"Turtle", "Pen", "RawTurtle", "Screen", "bgcolor", "colormode", "done", "mainloop", "exitonclick", "setup", "title", "tracer", "update"})
+    return mod
+
+
+def _install_turtle(rec):
+    sys.modules["turtle"] = _make_turtle_module(rec)
+
+
 def _apply_memory_limit(limit_bytes):
     if not limit_bytes:
         return
@@ -640,6 +940,7 @@ def main():
     sys.stdout = CapturedStream(rec, "stdout")
     sys.stderr = CapturedStream(rec, "stderr")
     _install_input(rec, payload.get("stdin") or "")  # never blocks: no more lines -> EOFError
+    _install_turtle(rec)  # `import turtle` draws into the trace instead of opening a window
     timer.start()
 
     if payload.get("mode", "trace") == "test":

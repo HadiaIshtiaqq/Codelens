@@ -8,6 +8,12 @@ export interface Concept {
 }
 
 export const CONCEPTS: Record<string, Concept> = {
+  turtle: {
+    emoji: '🐢',
+    title: 'Drawing with a turtle',
+    text: 'The turtle holds a pen. When it walks, it draws a line behind it. forward( ) walks, left( ) and right( ) turn, and penup( ) lifts the pen.',
+    example: 'pen.forward(100)\npen.left(90)',
+  },
   variable: {
     emoji: '📦',
     title: 'A box with a name',

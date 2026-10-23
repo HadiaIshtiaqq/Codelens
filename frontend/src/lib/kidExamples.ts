@@ -47,6 +47,50 @@ export const KID_EXAMPLES: KidExample[] = [
     stdin: 'Mia\n',
   },
   {
+    id: 'square',
+    title: '🐢 Draw a square',
+    source: `import turtle
+
+pen = turtle.Turtle()
+pen.color("blue")
+pen.pensize(4)
+for side in range(4):
+    pen.forward(120)
+    pen.left(90)
+`,
+  },
+  {
+    id: 'star',
+    title: '⭐ Draw a star',
+    source:
+      `import turtle
+
+star = turtle.Turtle()
+star.color("orange", "gold")
+star.begin_fill()
+for point in range(5):
+    star.forward(150)
+    star.right(144)
+star.end_fill()
+`,
+  },
+  {
+    id: 'rainbow',
+    title: '🌈 Rainbow spiral',
+    source:
+      `import turtle
+
+turtle.bgcolor("black")
+pen = turtle.Turtle()
+colors = ["red", "orange", "yellow", "green", "blue", "purple"]
+for size in range(36):
+    pen.pencolor(colors[size % 6])
+    pen.pensize(3)
+    pen.forward(size * 5)
+    pen.left(61)
+`,
+  },
+  {
     id: 'bug',
     title: '🐞 Find the bug!',
     source: 'cookies = 12\nfriends = 0\nprint("Each friend gets", cookies / friends)\n',

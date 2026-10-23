@@ -14,6 +14,7 @@ import re
 from typing import Any, Optional
 
 from app.services.narrate import _Narrator, _body_span, _target_names
+from app.services.turtlespeak import turtle_sentence
 
 # The helper's name. Used sparingly: most sentences describe the code, not the helper.
 NAME = "Robo"
@@ -305,6 +306,8 @@ class KidNarrator(_Narrator):
         concept = concept_of(node)
         if node is None:
             return f"📖 Reading line {ev['line']}.", None
+        if (drawing := turtle_sentence(node, kid=True)):
+            return drawing, "turtle"
         after = self._after(k)
         after_locals = after["locals"] if after else {}
         before = ev.get("locals", {})

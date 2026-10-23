@@ -87,6 +87,7 @@ class TraceEvent(BaseModel):
     kid_narration: Optional[str] = Field(default=None, description="The same step explained for a young beginner")
     concept: Optional[str] = Field(default=None, description="The programming idea this step shows (for intro cards)")
     viz: Optional[dict[str, Any]] = Field(default=None, description="Frames + heap snapshot for the visual view")
+    draw: Optional[list[dict[str, Any]]] = Field(default=None, description="turtle drawing ops made while this line ran")
     exception: Optional[ExceptionDetail] = None
     stdout_chunk: Optional[str] = None
     exit_code: Optional[int] = None

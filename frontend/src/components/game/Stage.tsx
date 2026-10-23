@@ -1,9 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ExecutionResponse, HeapObject, TraceEvent, VizFrame, VizSnapshot, VizValue } from '../../api/types';
 import { aliasesOf, describeViz, heapOrder, isRef } from '../../lib/viz';
+import { TurtleStage } from '../TurtleStage';
 import { CardsBoard } from './CardsBoard';
 
-export type BoardView = 'cards' | 'arrows';
+export type BoardView = 'cards' | 'arrows' | 'drawing';
 
 interface Props {
   viz: VizSnapshot | null;
@@ -17,6 +18,9 @@ interface Props {
   view: BoardView;
   onView: (view: BoardView) => void;
   changed: Set<string>;
+  /** The run's events when the program draws with turtle (adds the Drawing view). */
+  drawingEvents: TraceEvent[] | null;
+  drawingUpto: number;
 }
 
 interface Arrow {
@@ -248,7 +252,7 @@ function Confetti() {
 }
 
 /** Python-Tutor-style frames & objects view, presented as a game board. */
-export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay, view, onView, changed }: Props) {
+export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay, view, onView, changed, drawingEvents, drawingUpto }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [arrows, setArrows] = useState<Arrow[]>([]);
@@ -372,6 +376,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
             [
               ['cards', '🃏 Cards'],
               ['arrows', '🔗 Arrows'],
+              ...(drawingEvents ? ([['drawing', '🐢 Drawing']] as const) : []),
             ] as const
           ).map(([v, label]) => (
             <button
@@ -380,7 +385,13 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
               aria-checked={view === v}
               onClick={() => onView(v)}
               className={`px-2.5 py-1 font-semibold ${view === v ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
-              title={v === 'cards' ? 'Each variable on a card with its value written out' : 'Objects as boxes, with arrows from the variables that point at them'}
+              title={
+                v === 'cards'
+                  ? 'Each variable on a card with its value written out'
+                  : v === 'arrows'
+                    ? 'Objects as boxes, with arrows from the variables that point at them'
+                    : "What the turtle has drawn so far"
+              }
             >
               {label}
             </button>
@@ -404,7 +415,7 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
       {event?.event === 'stdout' && (
         // Cards fill the top of the board, so the speech bubble goes at the bottom there.
         <div
-          className={`cl-bubble absolute left-4 z-20 max-w-[60%] rounded-2xl rounded-bl-none border border-violet-400 bg-violet-950 px-3 py-1.5 font-mono text-sm text-violet-100 shadow-lg ${view === 'cards' ? 'bottom-4' : 'top-12'}`}
+          className={`cl-bubble absolute left-4 z-20 max-w-[60%] rounded-2xl rounded-bl-none border border-violet-400 bg-violet-950 px-3 py-1.5 font-mono text-sm text-violet-100 shadow-lg ${view !== 'arrows' ? 'bottom-4' : 'top-12'}`}
         >
           💬 {event.stdout_chunk.trimEnd() || '(blank line)'}
         </div>
@@ -414,6 +425,11 @@ export function Stage({ viz, event, summary, isLast, onExplain, onFix, onReplay,
           {describeViz(viz)}
         </p>
         {view === 'cards' && <CardsBoard viz={viz} changed={changed} />}
+        {view === 'drawing' && drawingEvents && (
+          <div className="h-full p-3">
+            <TurtleStage events={drawingEvents} upto={drawingUpto} />
+          </div>
+        )}
         {/* Narrow screens stack frames above objects; arrows are recomputed from the layout either way.
             The sizer takes the scaled size so the panel only scrolls when the board really is bigger. */}
         {view === 'arrows' && (

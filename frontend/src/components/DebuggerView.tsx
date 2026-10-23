@@ -5,6 +5,7 @@ import { useGame } from '../hooks/useGame';
 import { ProgramPlan } from './ProgramPlan';
 import { detectNonPython } from '../lib/detect';
 import { callStackAt, changedVariables, stdoutUpTo } from '../lib/trace';
+import { hasDrawing } from '../lib/turtle';
 import { vizAt } from '../lib/viz';
 import { CallStack } from './CallStack';
 import { CodeEditor } from './CodeEditor';
@@ -58,6 +59,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const [simpleWords, setSimpleWords] = useState(true);
   const [board, setBoard] = useState<BoardView>(loadBoard);
   const chooseBoard = (view: BoardView) => {
+    setDrawingFirst(false);
     setBoard(view);
     try {
       localStorage.setItem(BOARD_KEY, view);
@@ -85,6 +87,11 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const changed = useMemo(() => (run ? changedVariables(events, step) : new Set<string>()), [run, events, step]);
   const stdoutToStep = useMemo(() => (run ? stdoutUpTo(events, step) : ''), [run, events, step]);
   const viz = useMemo(() => (run && !stale ? vizAt(events, step) : null), [run, events, step, stale]);
+  const draws = useMemo(() => hasDrawing(events), [events]);
+  // A program that draws opens on the Drawing board (without changing the saved preference).
+  const [drawingFirst, setDrawingFirst] = useState(false);
+  useEffect(() => setDrawingFirst(draws), [run, draws]);
+  const boardView: BoardView = drawingFirst && draws ? 'drawing' : board === 'drawing' && !draws ? 'cards' : board;
 
   // Follow the robot: when a step runs in another file, show that file.
   useEffect(() => {
@@ -300,9 +307,11 @@ export function DebuggerView({ dbg, onConvert }: Props) {
                   setAiOpen(true);
                   await dbg.generatePatch();
                 }}
-                view={board}
+                view={boardView}
                 onView={chooseBoard}
                 changed={changed}
+                drawingEvents={draws && !stale ? events : null}
+                drawingUpto={step}
               />
             </div>
             <div className="shrink-0 border-t border-slate-800">

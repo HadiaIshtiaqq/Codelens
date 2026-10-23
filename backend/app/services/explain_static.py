@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 from app.services.kidspeak import NAME, as_question, words
 from app.services.narrate import _static, _statements_by_line
+from app.services.turtlespeak import turtle_sentence
 
 Level = str  # "kid" | "standard"
 
@@ -33,6 +34,8 @@ def _user_function(call: ast.AST, functions: set[str]) -> Optional[str]:
 
 def kid_line(node: ast.stmt, functions: set[str], classes: frozenset[str] = frozenset()) -> str:
     """What one statement does, in a young beginner's words (no runtime values)."""
+    if (drawing := turtle_sentence(node, kid=True)):
+        return drawing
     if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Attribute):
         target = node.targets[0]
         thing = words(node.value)

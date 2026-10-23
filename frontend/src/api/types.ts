@@ -1,4 +1,5 @@
 // Mirrors backend/app/schemas.py (spec §3.2, §4.2).
+import type { DrawOp } from '../lib/turtle';
 
 export type TraceEventType = 'call' | 'line' | 'return' | 'exception' | 'stdout' | 'exit';
 export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'timed_out' | 'failed' | 'cancelled';
@@ -25,6 +26,8 @@ export interface BaseTraceEvent {
   /** The programming idea this step shows, e.g. 'variable', 'for-loop' (Kids mode idea cards). */
   concept?: string;
   viz?: VizSnapshot;
+  /** turtle drawing ops made while this line ran (see lib/turtle.ts). */
+  draw?: DrawOp[];
 }
 
 // ---- Visual snapshot (frames + heap with object identity) -----------------
