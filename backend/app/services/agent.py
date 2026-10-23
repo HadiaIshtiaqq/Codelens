@@ -69,12 +69,14 @@ async def _call_tool(name: str, args: dict[str, Any], st: AgentState) -> dict[st
         return st.execution_id or ""
 
     if name == "run_code":
-        res = await tools.explain_code(st.source)
-        run = res["run"]
-        st.execution_id, st.failed = res["execution_id"], bool(run.get("error")) or run["status"] != "completed"
+        # Just the run (no AI explanation): free AI tiers allow few requests, so diagnose is a separate step.
+        run = await tools.run_python(st.source)
+        st.execution_id, st.failed = run["execution_id"], bool(run.get("error")) or run["status"] != "completed"
         if st.failed and run.get("error"):
             st.line = run["error"].get("line") or st.line
-        out = {"speech": res["speech"], "status": run["status"], "error": run.get("error"), "stdout": (run.get("stdout") or "")[:600]}
+        speech = (await tools._endless_loop_speech(run["execution_id"]) if run["status"] == "timed_out"
+                  else tools._outcome_speech(run))
+        out = {"speech": speech, "status": run["status"], "error": run.get("error"), "stdout": (run.get("stdout") or "")[:600]}
     elif name == "diagnose":
         res = await tools.get_debugging_summary(await ensure_run())
         out = {"speech": res["speech"], "observed_facts": res.get("observed_facts", [])[:8]}

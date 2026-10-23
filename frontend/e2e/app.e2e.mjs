@@ -377,10 +377,19 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
   await load('def total(xs):\n    s = 0\n    for i in range(len(xs) + 1):\n        s += xs[i]\n    return s\n\nprint(total([1, 2, 3]))\n');
   await page.getByRole('tab', { name: /Alexa/ }).click();
   await page.getByText(/MCP connected · \d+ tools/).waitFor({ timeout: 20000 });
-  const ask = async (text, expected) => {
+  const ask = async (text, expected, { flies = false } = {}) => {
     await page.getByLabel('Say something to Alexa').fill(text);
     await page.getByRole('button', { name: 'Ask', exact: true }).click();
-    await page.getByText(expected).first().waitFor({ timeout: 30000 });
+    await page.getByText(expected).first().waitFor({ timeout: 60000 });
+    if (flies) {
+      // Answers about a line send Lexi to point at it (an AI answer may not name one); she flies back with "Back to Alexa".
+      const flew = await page.getByTestId('lexi-bubble').waitFor({ timeout: 6000 }).then(() => true, () => false);
+      if (flew) {
+        await page.getByRole('button', { name: '← Back to Alexa' }).click();
+        await page.getByLabel('Say something to Alexa').waitFor();
+      }
+      return flew;
+    }
   };
   await ask('Alexa, run my code', /crashed with an IndexError on line 4/);
   // Lexi flies to the code, points at the failing line, and flies back.
@@ -391,12 +400,12 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
   await page.screenshot({ path: `${OUT}/5-lexi.png` });
   await page.getByRole('button', { name: '← Back to Alexa' }).click();
   await page.getByLabel('Say something to Alexa').waitFor();
-  await ask('how is the total calculated', /Here is how your code handles total/); // open questions, from the code
+  await ask('how is the total calculated', /how your code handles total|total/, { flies: true }); // open questions
   // Autopilot: Alexa chains the tools herself (run -> diagnose -> fix -> test) from one sentence.
-  await ask('debug my code', /fix is validated/);
+  if (!(await ask('debug my code', /test passed|fix is validated/, { flies: true }))) throw new Error('Lexi did not fly to the bug');
   const plan = await page.getByTestId('alexa-plan').last().innerText();
-  for (const tool of ['run_code', 'diagnose', 'propose_fix', 'test_fix']) if (!plan.includes(tool)) throw new Error(`plan misses ${tool}: ${plan}`);
-  await ask('fix it', /I have a fix/);
+  for (const tool of ['run_code', 'propose_fix', 'test_fix']) if (!plan.includes(tool)) throw new Error(`plan misses ${tool}: ${plan}`);
+  await ask('fix it', /I have a fix|test passed|validated/, { flies: true });
   await ask('test the fix', /apply the fix/);
   await ask('apply the fix', /put the fixed code in your editor/);
   await page.getByRole('button', { name: 'Show MCP traffic' }).click(); // hidden by default

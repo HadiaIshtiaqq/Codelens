@@ -110,7 +110,8 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
   const say = (text: string, viaVoice: boolean, extra: Partial<Turn> = {}, point = false) => {
     const line = extra.line ?? Number(text.match(/\bline (\d+)\b/)?.[1] ?? 0);
     setTurns((prev) => [...prev, { id: ++turnCounter, who: 'alexa', text, ...extra, line: line || undefined }]);
-    if (point && line) showLine(line, text);
+    // Answers about a particular line: let the answer appear, then Lexi flies over and points at it.
+    if (point && line) window.setTimeout(() => showLine(line, text), 1200);
     if ((viaVoice || alwaysSpeak) && speechSupported) {
       setLight('speaking');
       speak(text, () => setLight('idle'));
@@ -146,7 +147,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
       case 'summary': {
         const run = await ensureRun();
         const res = await client.callTool<{ speech: string }>('get_debugging_summary', { execution_id: run.execution_id });
-        return say(res.speech, viaVoice, { tool: 'get_debugging_summary' });
+        return say(res.speech, viaVoice, { tool: 'get_debugging_summary' }, true);
       }
       case 'variable': {
         const run = await ensureRun();
@@ -215,7 +216,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           tool: res.source === 'ai' ? 'debug_autopilot · planned by the AI' : 'debug_autopilot',
           line: res.line ?? undefined,
           card: { kind: 'plan', steps: res.steps, diff: res.patch?.diff, byAi: res.source === 'ai' },
-        });
+        }, true);
       }
       case 'ask': {
         // Open questions are answered from the code itself, and Lexi can show the main line.
@@ -225,7 +226,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           ...(lastRun ? { execution_id: lastRun.execution_id } : {}),
         });
         const via = res.source === 'ai' ? `ask_about_code · answered by ${res.provider}` : 'ask_about_code · from the code (AI offline)';
-        return say(res.speech, viaVoice, { tool: via, line: res.line ?? undefined });
+        return say(res.speech, viaVoice, { tool: via, line: res.line ?? undefined }, true);
       }
       default:
         return say('Ask me about your code: run it, why it crashed, what a variable is, or how a part of it works.', viaVoice);
