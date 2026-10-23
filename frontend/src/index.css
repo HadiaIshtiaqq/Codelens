@@ -316,3 +316,46 @@
   from { transform: scaleY(0.7); opacity: 0.8; }
   to { transform: scaleY(1.6); opacity: 1; }
 }
+
+/* ---------------------------------------------------------------------------
+   Light theme: palettes flip through src/theme.css; these are the hand-picked colours
+   ------------------------------------------------------------------------- */
+:root.light {
+  color-scheme: light;
+}
+:root.light body {
+  background: #f1f5f9;
+}
+:root.light body::before {
+  background:
+    radial-gradient(40% 35% at 15% 10%, rgba(14, 165, 233, 0.12), transparent 70%),
+    radial-gradient(35% 30% at 85% 15%, rgba(34, 211, 238, 0.1), transparent 70%),
+    radial-gradient(45% 40% at 60% 95%, rgba(59, 130, 246, 0.08), transparent 70%);
+}
+:root.light .cl-stage-bg {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.08), transparent 45%),
+    radial-gradient(circle at 90% 100%, rgba(249, 115, 22, 0.06), transparent 40%),
+    linear-gradient(rgba(100, 116, 139, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.08) 1px, transparent 1px);
+}
+:root.light .cl-inline-note {
+  color: #92400e !important;
+  background: rgba(250, 204, 21, 0.18);
+}
+:root.light .blocklyToolboxDiv,
+:root.light .blocklyToolbox {
+  background-color: #e2e8f0 !important;
+}
+:root.light .blocklyTreeLabel,
+:root.light .blocklyToolboxCategoryLabel {
+  color: #0f172a !important;
+}
+:root.light .blocklyTreeRow:hover,
+:root.light .blocklyToolboxCategory:hover {
+  background-color: #cbd5e1 !important;
+}
+:root.light ::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.35);
+}

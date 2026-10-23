@@ -3,6 +3,7 @@ import { ACCESS_DENIED_EVENT, api, getAccessCode, setAccessCode } from './api/cl
 import type { Health } from './api/types';
 import { DebuggerView } from './components/DebuggerView';
 import { useDebugger } from './hooks/useDebugger';
+import { setTheme, useTheme } from './lib/theme';
 
 // Secondary tabs are split into their own chunks, so the debugger appears sooner.
 const ReaView = lazy(() => import('./components/rea/ReaView').then((m) => ({ default: m.ReaView })));
@@ -99,6 +100,7 @@ export default function App() {
     };
   }, []);
 
+  const theme = useTheme();
   const showRea = !!health?.features?.rea_ui;
   const aiReady = !!health && health.llm_provider !== 'offline';
 
@@ -131,6 +133,14 @@ export default function App() {
           ))}
         </nav>
         <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
+          <button
+            className="chip border-white/10 bg-slate-900/70 text-slate-200 transition hover:border-cyan-400/50"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+          >
+            {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
+          </button>
           {healthError ? (
             <span className="chip border-red-500/50 bg-red-950/70 text-red-100" role="status">
               ✖ backend offline (start it with scripts\start.ps1)

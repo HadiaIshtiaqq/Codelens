@@ -25,4 +25,15 @@ monaco.editor.defineTheme('codelens-dark', {
   },
 });
 
+monaco.editor.defineTheme('codelens-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [],
+  colors: {
+    'editor.background': '#ffffff',
+    'editorGutter.background': '#ffffff',
+    'editor.lineHighlightBackground': '#0000000a',
+  },
+});
+
 export { monaco };

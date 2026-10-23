@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
+    <script>
+      // Apply the saved theme before the first paint, so light mode doesn't flash dark.
+      try {
+        if (localStorage.getItem('codelens.theme') === 'light') document.documentElement.classList.add('light');
+      } catch (e) {}
+    </script>
     <title>CodeLens AI + REA</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='14' cy='14' r='9' fill='none' stroke='%233b82f6' stroke-width='4'/><path d='M21 21l7 7' stroke='%23f97316' stroke-width='4' stroke-linecap='round'/></svg>" />
   </head>

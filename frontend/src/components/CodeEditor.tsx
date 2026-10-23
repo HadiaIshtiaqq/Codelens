@@ -1,6 +1,7 @@
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useEffect, useRef } from 'react';
 import { registerHoverProvider, setHoverNotes } from '../lib/hover';
+import { useTheme } from '../lib/theme';
 import { monaco } from '../lib/monaco';
 
 interface Props {
@@ -40,6 +41,7 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
   const toggleBpRef = useRef(onToggleBreakpoint);
   toggleBpRef.current = onToggleBreakpoint;
   const game = variant === 'game';
+  const theme = useTheme();
 
   useEffect(() => {
     registerHoverProvider();
@@ -141,7 +143,7 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
       height="100%"
       path={path}
       language="python"
-      theme="codelens-dark"
+      theme={theme === 'light' ? 'codelens-light' : 'codelens-dark'}
       value={value}
       onChange={(v) => onChange(v ?? '')}
       onMount={onMount}

@@ -386,6 +386,15 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
   await page.getByRole('tab', { name: /Python Debugger/ }).click();
   await page.getByRole('radio', { name: /Game/ }).click();
 });
+await check('light mode switch', async () => {
+  await page.getByRole('button', { name: 'Switch to light mode' }).click();
+  if (!(await page.evaluate(() => document.documentElement.classList.contains('light')))) throw new Error('not light');
+  const bg = await page.evaluate(() => getComputedStyle(document.querySelector('header')).backgroundColor);
+  await page.screenshot({ path: `${OUT}/4-light.png` });
+  await page.getByRole('button', { name: 'Switch to dark mode' }).click();
+  if (await page.evaluate(() => document.documentElement.classList.contains('light'))) throw new Error('still light');
+  if (!bg.startsWith('rgba(248') && !bg.startsWith('rgba(241') && !bg.startsWith('rgb(248')) throw new Error(`header not light: ${bg}`);
+});
 await check('classic view', async () => {
   await page.getByRole('radio', { name: /Classic/ }).click();
   await page.getByText('Timeline').first().waitFor();

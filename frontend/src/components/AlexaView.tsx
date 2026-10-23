@@ -280,7 +280,7 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] border-[8px] border-black bg-[#0a1424] shadow-2xl shadow-black/50 ring-1 ring-white/10">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] border-[8px] border-slate-950 bg-slate-900 shadow-2xl shadow-black/50 ring-1 ring-white/10">
           <div ref={conversation} className="min-h-0 flex-1 space-y-3 overflow-auto p-4 sm:p-5" aria-live="polite">
             {turns.length === 0 && (
               <div className="cl-view-in flex min-h-full flex-col items-center justify-center gap-3 py-4 text-center">

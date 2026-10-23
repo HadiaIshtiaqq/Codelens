@@ -1,12 +1,14 @@
 import { DiffEditor, Editor } from '@monaco-editor/react';
 import { useState } from 'react';
 import type { Debugger } from '../hooks/useDebugger';
+import { useTheme } from '../lib/theme';
 import { PatchBadge } from './StatusBadge';
 
 type Tab = 'explain' | 'diff' | 'tests';
 
 /** AI Explanation & Patch Review view (spec §4.1, FR-05, FR-06). */
 export function AIPanel({ dbg, onRevealLine }: { dbg: Debugger; onRevealLine: (line: number) => void }) {
+  const editorTheme = useTheme() === 'light' ? 'codelens-light' : 'codelens-dark';
   const [tab, setTab] = useState<Tab>('explain');
   const [question, setQuestion] = useState('');
   const { run, explanation, patch, validation, busy, aiError, step } = dbg;
@@ -171,7 +173,7 @@ export function AIPanel({ dbg, onRevealLine }: { dbg: Debugger; onRevealLine: (l
                   <DiffEditor
                     height="100%"
                     language="python"
-                    theme="codelens-dark"
+                    theme={editorTheme}
                     original={dbg.run?.source ?? ''}
                     modified={patch.patched_source}
                     // Avoid "TextModel got disposed before DiffEditorWidget model got reset" on unmount.
@@ -217,7 +219,7 @@ export function AIPanel({ dbg, onRevealLine }: { dbg: Debugger; onRevealLine: (l
               <Editor
                 height="100%"
                 language="python"
-                theme="codelens-dark"
+                theme={editorTheme}
                 value={dbg.tests}
                 onChange={(v) => dbg.setTests(v ?? '')}
                 options={{ minimap: { enabled: false }, fontSize: 13, automaticLayout: true, scrollBeyondLastLine: false, ariaLabel: 'Test code' }}
