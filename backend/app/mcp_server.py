@@ -280,19 +280,24 @@ async def validate_fix(patch_id: str, tests: Optional[str] = None) -> dict[str, 
     return {"speech": speech, **result}
 
 
-def http_app(token: Optional[str], host: str = "127.0.0.1", public_hosts: Optional[list[str]] = None):
-    """Streamable HTTP MCP app at /mcp, optionally guarded by a static bearer token.
+def http_app(token: Optional[str], host: str = "127.0.0.1", public_hosts: Optional[list[str]] = None,
+             path: str = "/mcp", local_browsers: bool = False):
+    """Streamable HTTP MCP app at `path`, optionally guarded by a static bearer token.
 
     DNS-rebinding protection stays on: only localhost and the explicitly listed public
     host names (CODELENS_MCP_PUBLIC_HOSTS, e.g. your tunnel domain) are accepted.
+    `local_browsers` also accepts pages served from localhost (the in-app Alexa+ simulator).
     """
     from mcp.server.transport_security import TransportSecuritySettings
 
     allowed = ["127.0.0.1", "127.0.0.1:*", "localhost", "localhost:*", *(public_hosts or [])]
     allowed += [f"{h}:*" for h in public_hosts or [] if ":" not in h]
+    origins = [f"https://{h}" for h in public_hosts or []]
+    if local_browsers:
+        origins += ["http://127.0.0.1", "http://127.0.0.1:*", "http://localhost", "http://localhost:*"]
     security = TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=allowed,
-                                         allowed_origins=[f"https://{h}" for h in public_hosts or []])
-    inner = mcp.streamable_http_app(host=host, transport_security=security)
+                                         allowed_origins=origins)
+    inner = mcp.streamable_http_app(host=host, transport_security=security, streamable_http_path=path)
     if not token:
         return inner
     expected = f"Bearer {token}".encode()

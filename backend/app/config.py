@@ -71,6 +71,8 @@ class Settings:
     retention_hours: float = field(default_factory=lambda: float(os.getenv("CODELENS_RETENTION_HOURS", "72")))
     # Hosted deployments: require this code on every API call (empty = open, for local use).
     access_code: str = field(default_factory=lambda: os.getenv("CODELENS_ACCESS_CODE", ""))
+    # Public host names the /mcp endpoint answers to (DNS-rebinding protection), e.g. "codelens.example.com".
+    mcp_public_hosts: str = field(default_factory=lambda: os.getenv("CODELENS_MCP_PUBLIC_HOSTS", ""))
     # Requests per minute per client IP on run/AI endpoints; 0 disables.
     rate_limit_per_minute: int = field(default_factory=lambda: int(os.getenv("CODELENS_RATE_LIMIT_PER_MIN", "60")))
 

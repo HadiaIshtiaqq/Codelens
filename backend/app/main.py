@@ -2,15 +2,17 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
+from app import mcp_server
 from app.config import PROJECT_DIR, get_settings
 from app.routers import analysis, convert, executions, explain, rea
-from app.services.access import AccessCodeMiddleware
+from app.services.access import AccessCodeMiddleware, parse_codes
 from app.services.llm import select_provider
 from app.services.ratelimit import RateLimiter, RateLimitMiddleware
 from app.services.rea import ReaService
@@ -45,7 +47,12 @@ async def lifespan(app: FastAPI):
         "on" if settings.access_code else "off",
         " ".join(settings.rea_command),
     )
-    yield
+    # The MCP endpoint's tools call this same app in-process, with an access code when one is required.
+    codes = parse_codes(settings.access_code)
+    mcp_server.ACCESS_CODE = next(iter(codes.values()), "")
+    _mcp_endpoint.rebuild(settings)
+    async with mcp_server.mcp.session_manager.run():
+        yield
     purge_task.cancel()
     app.state.runner.close()
     app.state.rea.mcp.close()
@@ -81,11 +88,50 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-CodeLens-Access"],
 )
 
+class _McpExactPath:
+    """Agents are configured with ".../mcp"; the mounted MCP app lives at "/mcp/" (no redirect for POSTs)."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"] == "/mcp":
+            scope = {**scope, "path": "/mcp/", "raw_path": b"/mcp/"}
+        await self.inner(scope, receive, send)
+
+
+app.add_middleware(_McpExactPath)
+
 app.include_router(executions.router)
 app.include_router(analysis.router)
 app.include_router(convert.router)
 app.include_router(explain.router)
 app.include_router(rea.router)
+
+
+# MCP over Streamable HTTP at /mcp: for Alexa+ and other agents, and for the in-app Alexa+ simulator.
+# It is guarded like the REST API (access code, rate limits) and its tools call the API in-process.
+class _McpEndpoint:
+    """The mounted MCP app, rebuilt at every startup (its session manager can only run once)."""
+
+    def __init__(self):
+        self.inner = None
+
+    def rebuild(self, settings) -> None:
+        public = [h.strip() for h in settings.mcp_public_hosts.split(",") if h.strip()]
+        self.inner = mcp_server.http_app(None, public_hosts=public, path="/", local_browsers=True)
+
+    async def __call__(self, scope, receive, send):
+        if self.inner is None:
+            await Response("MCP endpoint is starting", status_code=503)(scope, receive, send)
+            return
+        await self.inner(scope, receive, send)
+
+
+mcp_server._transport = httpx.ASGITransport(app=app)
+mcp_server.API_URL = "http://codelens.internal"
+_mcp_endpoint = _McpEndpoint()
+app.mount("/mcp", _mcp_endpoint)
 
 
 @app.get("/health")

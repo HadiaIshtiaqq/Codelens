@@ -36,7 +36,7 @@ class AccessCodeMiddleware:
 
     async def __call__(self, scope, receive, send):
         codes = parse_codes(self._code_getter())
-        if codes and scope["type"] == "http" and scope["path"].startswith("/api/") and scope["method"] != "OPTIONS":
+        if codes and scope["type"] == "http" and scope["path"].startswith(("/api/", "/mcp")) and scope["method"] != "OPTIONS":
             sent = dict(scope.get("headers") or []).get(HEADER, b"")
             if not any(secrets.compare_digest(sent, c.encode()) for c in codes.values()):
                 body = json.dumps({"detail": "access code required"}).encode()
