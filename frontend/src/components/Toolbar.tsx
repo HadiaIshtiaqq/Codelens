@@ -1,12 +1,13 @@
 import { useEffect, type ReactNode } from 'react';
 import type { Debugger } from '../hooks/useDebugger';
+import type { Pace, Playback } from '../hooks/usePlayback';
 import { EXAMPLES } from '../lib/examples';
 import { SAFE_URL_LENGTH, shareUrl } from '../lib/share';
 import { useState } from 'react';
 import { StatusBadge } from './StatusBadge';
 
 /** Header toolbar (spec §4.1) with keyboard shortcuts (spec §1.4 accessibility). */
-export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }) {
+export function Toolbar({ dbg, playback, leading }: { dbg: Debugger; playback: Playback; leading?: ReactNode }) {
   const [shareNote, setShareNote] = useState<string | null>(null);
   const { phase, step, total, run, stale } = dbg;
   const running = phase === 'running';
@@ -16,7 +17,7 @@ export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       let handled = true;
-      if (mod && e.key === 'Enter') dbg.execute();
+      if (mod && e.key === 'Enter') void playback.runAndPlay();
       else if (e.key === 'F10' && e.shiftKey) dbg.prev();
       else if (e.key === 'F10') dbg.next();
       else if (e.altKey && e.key === 'ArrowRight') dbg.next();
@@ -36,7 +37,7 @@ export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }
     };
     window.addEventListener('keydown', onKey, true); // capture: works while Monaco has focus
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [dbg, running]);
+  }, [dbg, running, playback]);
 
   return (
     <div role="toolbar" aria-label="Execution controls" className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -72,7 +73,7 @@ export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }
           ■ Cancel <span className="kbd">Esc</span>
         </button>
       ) : (
-        <button className="btn btn-primary" onClick={dbg.execute} aria-keyshortcuts="Control+Enter">
+        <button className="btn btn-primary" onClick={() => void playback.runAndPlay()} aria-keyshortcuts="Control+Enter" title="Run the program and play it step by step (Ctrl+Enter)">
           ▶ Run Code <span className="kbd hidden 2xl:inline">Ctrl+↵</span>
         </button>
       )}
@@ -104,15 +105,39 @@ export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }
 
       <div className="mx-1 h-6 w-px bg-slate-700" aria-hidden />
 
-      <button className="btn" onClick={dbg.reset} disabled={!canStep || step === 0} aria-keyshortcuts="Alt+Home" title="Reset to first step (Alt+Home)">
+      <button
+        className={`btn ${playback.playing ? 'btn-warn' : ''} min-w-[84px] justify-center`}
+        onClick={playback.toggle}
+        disabled={!canStep || total < 2}
+        aria-pressed={playback.playing}
+        title="Play the steps automatically, or pause"
+      >
+        {playback.playing ? '⏸ Pause' : '▶ Play'}
+      </button>
+      <select
+        className="input py-1 text-xs"
+        value={playback.pace}
+        onChange={(e) => playback.setPace(e.target.value as Pace)}
+        aria-label="Playback speed"
+        title="Playback speed"
+      >
+        <option value="slow">🐢 Slow</option>
+        <option value="normal">🚶 Normal</option>
+        <option value="fast">🐇 Fast</option>
+        <option value="manual">✋ Step by step</option>
+      </select>
+      <button className="btn" onClick={() => { playback.pause(); dbg.reset(); }} disabled={!canStep || step === 0} aria-keyshortcuts="Alt+Home" title="Reset to first step (Alt+Home)">
         ⏮ Reset
       </button>
-      <button className="btn" onClick={dbg.prev} disabled={!canStep || step === 0} aria-keyshortcuts="Shift+F10 Alt+ArrowLeft" title="Step previous (Shift+F10 / Alt+←)">
+      <button className="btn" onClick={() => { playback.pause(); dbg.prev(); }} disabled={!canStep || step === 0} aria-keyshortcuts="Shift+F10 Alt+ArrowLeft" title="Step previous (Shift+F10 / Alt+←)">
         ◀ Step Prev
       </button>
       <button
         className="btn"
-        onClick={dbg.next}
+        onClick={() => {
+          playback.pause();
+          dbg.next();
+        }}
         disabled={!canStep || step >= total - 1}
         aria-keyshortcuts="F10 Alt+ArrowRight"
         title="Step next (F10 / Alt+→)"
@@ -165,7 +190,10 @@ export function Toolbar({ dbg, leading }: { dbg: Debugger; leading?: ReactNode }
             min={0}
             max={Math.max(0, total - 1)}
             value={step}
-            onChange={(e) => dbg.goTo(Number(e.target.value))}
+            onChange={(e) => {
+              playback.pause();
+              dbg.goTo(Number(e.target.value));
+            }}
             className="flex-1 accent-cyan-400"
             aria-valuetext={`Step ${step + 1} of ${total}`}
           />

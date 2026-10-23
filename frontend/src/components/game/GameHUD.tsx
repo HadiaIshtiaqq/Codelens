@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Debugger } from '../../hooks/useDebugger';
 import { ACHIEVEMENTS, type Game } from '../../hooks/useGame';
+import type { Playback } from '../../hooks/usePlayback';
 import { speak, speechSupported, stopSpeaking } from '../../lib/speech';
 
 const READ_ALOUD_KEY = 'codelens.game.read-aloud';
@@ -13,47 +14,16 @@ function loadReadAloud(): boolean {
   }
 }
 
-const SPEEDS: [string, number][] = [
-  ['🐢 0.5×', 1100],
-  ['1×', 600],
-  ['2×', 300],
-  ['⚡ 4×', 120],
-];
-
-/** Level/XP, streak, autoplay controls, predict mode, sound and achievements. */
-export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(600);
-  const [pauseOnCrash, setPauseOnCrash] = useState(true);
+/** Level/XP, streak, predict mode, read-aloud, sound and achievements. Playback lives in the toolbar. */
+export function GameHUD({ dbg, game, playback }: { dbg: Debugger; game: Game; playback: Playback }) {
   const [showTrophies, setShowTrophies] = useState(false);
   const [readAloud, setReadAloud] = useState(loadReadAloud);
-  const { run, step, total } = dbg;
-  const startedAt = useRef(0);
-  const playingRef = useRef(playing);
-  playingRef.current = playing;
+  const { run, step } = dbg;
   const speaking = readAloud && speechSupported;
+  const { hold } = playback;
 
-  // Autoplay: advance one step per tick; stop at the end or (optionally) on a crash.
-  useEffect(() => {
-    if (!playing || !run) return;
-    if (step >= total - 1) {
-      setPlaying(false);
-      return;
-    }
-    if (step !== startedAt.current && dbg.hitsBreakpoint(step)) {
-      setPlaying(false); // autoplay stops at breakpoints
-      return;
-    }
-    if (pauseOnCrash && run.events[step]?.event === 'exception' && step !== startedAt.current) {
-      setPlaying(false);
-      return;
-    }
-    if (speaking) return; // with read-aloud on, the next step starts when the sentence has been spoken
-    const id = setTimeout(() => dbg.goTo(step + 1), speed);
-    return () => clearTimeout(id);
-  }, [playing, step, total, run, speed, pauseOnCrash, dbg, speaking]);
-
-  // Read each step's explanation aloud (not during a Predict-mode guess: it would give the answer away).
+  // Read each step's explanation aloud, holding the player until the sentence is finished
+  // (not during a Predict-mode guess: it would give the answer away).
   useEffect(() => {
     try {
       localStorage.setItem(READ_ALOUD_KEY, readAloud ? 'on' : 'off');
@@ -62,69 +32,37 @@ export function GameHUD({ dbg, game }: { dbg: Debugger; game: Game }) {
     }
     if (!speaking || !run || dbg.stale) {
       stopSpeaking();
+      hold('speech', false);
       return;
     }
     const ev = run.events[step];
     if (!ev || game.awaitingGuess) {
       stopSpeaking();
+      hold('speech', false);
       return;
     }
-    let pending: number | undefined;
-    speak(ev.narration ?? '', () => {
-      if (playingRef.current && step < total - 1) pending = window.setTimeout(() => dbg.goTo(step + 1), 250);
-    });
-    return () => window.clearTimeout(pending);
+    hold('speech', true);
+    speak(ev.narration ?? '', () => hold('speech', false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, run, speaking, game.awaitingGuess, playing]);
+  }, [step, run, speaking, game.awaitingGuess]);
 
-  useEffect(() => () => stopSpeaking(), []);
-
-  useEffect(() => setPlaying(false), [run]);
-
-  const canPlay = !!run && !dbg.stale && total > 1 && !game.predictMode;
+  useEffect(
+    () => () => {
+      stopSpeaking();
+      hold('speech', false);
+    },
+    [hold],
+  );
 
   return (
     // Compact so it stays on one row beside the code: small buttons, short labels.
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 px-2 py-1.5 [&_.btn]:px-2 [&_.btn]:py-1 [&_.btn]:text-xs">
-      {/* Playback */}
-      <div className="flex items-center gap-1.5">
-        <button
-          className={`btn ${playing ? 'btn-warn' : 'btn-primary'} min-w-[76px] justify-center`}
-          disabled={!canPlay}
-          onClick={() => {
-            if (!playing) {
-              const from = step >= total - 1 ? 0 : step;
-              startedAt.current = from;
-              if (from !== step) dbg.goTo(from);
-            }
-            setPlaying(!playing);
-          }}
-          aria-pressed={playing}
-          title={game.predictMode ? 'Autoplay is off in Predict mode' : 'Watch the program play out'}
-        >
-          {playing ? '⏸ Pause' : '▶ Play'}
-        </button>
-        <select className="input py-1 text-xs" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Playback speed">
-          {SPEEDS.map(([label, ms]) => (
-            <option key={ms} value={ms}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-1 text-[11px] text-slate-400" title="Stop autoplay when the program crashes">
-          <input type="checkbox" checked={pauseOnCrash} onChange={(e) => setPauseOnCrash(e.target.checked)} />
-          <span className="hidden 2xl:inline">pause on</span> 💥
-        </label>
-      </div>
-
-      <div className="h-6 w-px bg-slate-700" aria-hidden />
-
       {/* Predict mode */}
       <button
         className={`btn ${game.predictMode ? 'border-fuchsia-400 bg-fuchsia-700 hover:bg-fuchsia-600' : ''}`}
         aria-pressed={game.predictMode}
         onClick={() => {
-          setPlaying(false);
+          playback.pause();
           game.setPredictMode(!game.predictMode);
         }}
         title="Guess which line runs next before each step to earn XP"

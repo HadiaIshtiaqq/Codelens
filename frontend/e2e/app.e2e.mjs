@@ -259,13 +259,19 @@ await check('game: read aloud speaks each step', async () => {
   await page.getByRole('button', { name: /Reading aloud/ }).click();
   await page.keyboard.press('Alt+E');
 });
-await check('game: program plan panel', async () => {
+await check('"What does this program do?" opens a line-by-line page in each view', async () => {
   await page.getByRole('button', { name: /What does this program do/ }).click();
-  await page.getByText(/Quest map: \d+ moves and 1 skill to learn \(average\)/).waitFor({ timeout: 10000 });
+  const dialog = page.getByRole('dialog', { name: 'Quest briefing' });
+  await dialog.getByText(/Quest map: \d+ moves and 1 skill to learn \(average\)/).waitFor({ timeout: 10000 });
+  await dialog.getByText(/Off-by-one on line \d+/).waitFor(); // the bug in average() is spotted before running
+  if ((await dialog.getByTestId('explainer-table').locator('tbody tr').count()) < 10) throw new Error('too few lines');
+  await page.screenshot({ path: `${OUT}/2-explainer.png` });
+  await page.keyboard.press('Escape');
   await page.getByRole('radio', { name: /Classic/ }).click(); // each view explains in its own voice
-  await page.getByText(/Module with \d+ top-level statements and 1 function \(average\(\)\)/).waitFor({ timeout: 10000 });
-  await page.getByRole('radio', { name: /Game/ }).click();
   await page.getByRole('button', { name: /What does this program do/ }).click();
+  await page.getByRole('dialog', { name: 'Program walkthrough' }).getByText(/Module with \d+ top-level statements and 1 function \(average\(\)\)/).waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Close (Esc)' }).click();
+  await page.getByRole('radio', { name: /Game/ }).click();
 });
 await check('explain every line', async () => {
   await page.getByRole('button', { name: /Explain every line/ }).click();
@@ -284,7 +290,7 @@ await check('game over, replay and autoplay', async () => {
   await page.keyboard.press('Alt+End');
   await page.getByText('GAME OVER').waitFor();
   await page.getByRole('button', { name: '↺ Replay' }).click();
-  await page.getByLabel('Playback speed').selectOption({ label: '⚡ 4×' });
+  await page.getByLabel('Playback speed').selectOption('fast'); // the shared player in the toolbar
   await page.getByRole('button', { name: '▶ Play' }).click();
   await page.waitForTimeout(1500);
   if (Number(await page.locator('#step-slider').inputValue()) < 5) throw new Error('autoplay did not advance');
@@ -385,6 +391,7 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
   await page.screenshot({ path: `${OUT}/5-lexi.png` });
   await page.getByRole('button', { name: '← Back to Alexa' }).click();
   await page.getByLabel('Say something to Alexa').waitFor();
+  await ask('how is the total calculated', /Here is how your code handles total/); // open questions, from the code
   await ask('fix it', /I have a fix/);
   await ask('test the fix', /apply the fix/);
   await ask('apply the fix', /put the fixed code in your editor/);
@@ -402,6 +409,22 @@ await check('light mode switch', async () => {
   await page.getByRole('button', { name: 'Switch to dark mode' }).click();
   if (await page.evaluate(() => document.documentElement.classList.contains('light'))) throw new Error('still light');
   if (!bg.startsWith('rgba(248') && !bg.startsWith('rgba(241') && !bg.startsWith('rgb(248')) throw new Error(`header not light: ${bg}`);
+});
+await check('one player: Run plays, and switching views keeps playing from the same step', async () => {
+  await load('total = 0\nfor n in range(40):\n    total += n\nprint(total)\n');
+  await page.getByLabel('Playback speed').selectOption('fast');
+  await page.getByRole('button', { name: /Run Code/ }).click();
+  await page.getByRole('button', { name: /Pause/ }).waitFor({ timeout: 30000 }); // playing by itself
+  const stepNow = async () => Number(await page.locator('#step-slider').inputValue());
+  await page.waitForTimeout(1500);
+  const inGame = await stepNow();
+  await page.getByRole('radio', { name: /Classic/ }).click();
+  await page.waitForTimeout(1500);
+  const inClassic = await stepNow();
+  if (!(inGame > 1 && inClassic > inGame)) throw new Error(`not playing across views: ${inGame} -> ${inClassic}`);
+  await page.getByRole('button', { name: /Pause/ }).click();
+  await page.getByLabel('Playback speed').selectOption('manual');
+  await page.getByRole('radio', { name: /Game/ }).click();
 });
 await check('classic view', async () => {
   await page.getByRole('radio', { name: /Classic/ }).click();

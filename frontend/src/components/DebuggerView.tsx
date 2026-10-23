@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { MAIN_FILE, type Debugger } from '../hooks/useDebugger';
 import { useCodeExplanation } from '../hooks/useCodeExplanation';
 import { useGame } from '../hooks/useGame';
-import { ProgramPlan } from './ProgramPlan';
+import { usePlayback } from '../hooks/usePlayback';
+import { ProgramExplainer } from './ProgramExplainer';
 import { detectNonPython } from '../lib/detect';
 import { callStackAt, changedVariables, stdoutUpTo } from '../lib/trace';
 import { hasDrawing } from '../lib/turtle';
@@ -52,6 +53,7 @@ export function DebuggerView({ dbg }: Props) {
   const [mode, setMode] = useState<Mode>(loadMode);
   const [reveal, setReveal] = useState<{ line: number; nonce: number } | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [classicTab, setClassicTab] = useState<'vars' | 'stack' | 'timeline' | 'ai'>('vars');
   const [explainAll, setExplainAll] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [board, setBoard] = useState<BoardView>(loadBoard);
@@ -68,6 +70,8 @@ export function DebuggerView({ dbg }: Props) {
   // Each view explains the program in its own voice (Robo Lab has its own plan in KidsView).
   const plan = useCodeExplanation(dbg.editorValue, mode === 'classic' ? 'classic' : 'game');
   const game = useGame(dbg);
+  // One player for all three views: switching views keeps playing from the same step. Robo Lab plays slower.
+  const playback = usePlayback(dbg, { tempo: mode === 'kids' ? 2 : 1, blocked: game.awaitingGuess });
   const revealLine = (line: number) => setReveal({ line, nonce: Date.now() });
 
   useEffect(() => {
@@ -156,14 +160,28 @@ export function DebuggerView({ dbg }: Props) {
   const planToggle = (
     <>
       <button
-        className={`btn px-2 py-0.5 text-xs ${planOpen ? 'border-emerald-500 bg-emerald-800/50' : ''}`}
-        aria-pressed={planOpen}
-        onClick={() => setPlanOpen(!planOpen)}
-        title="A short plan of the whole program, top to bottom"
+        className="btn px-2 py-0.5 text-xs"
+        aria-haspopup="dialog"
+        onClick={() => setPlanOpen(true)}
+        title="Open a line-by-line explanation of the whole program"
       >
         🗺 What does this program do?
       </button>
     </>
+  );
+
+  const explainer = planOpen && (
+    <ProgramExplainer
+      source={dbg.editorValue}
+      plan={plan}
+      level={mode === 'classic' ? 'classic' : 'game'}
+      currentLine={activeLine}
+      onLine={(line) => {
+        setPlanOpen(false);
+        revealLine(line);
+      }}
+      onClose={() => setPlanOpen(false)}
+    />
   );
 
   const stepBanner = event && (
@@ -178,11 +196,6 @@ export function DebuggerView({ dbg }: Props) {
   const editor = (variant: 'game' | 'classic') => (
     <div className="flex min-h-0 flex-1 flex-col">
       <FileTabs dbg={dbg} runningFile={event ? eventFile : null} />
-      {planOpen && (
-        <div className="max-h-[40%] overflow-auto border-b border-slate-800 bg-emerald-950/30 px-3 py-2">
-          <ProgramPlan plan={plan} currentLine={activeLine} onLine={revealLine} />
-        </div>
-      )}
       <div className="relative min-h-0 flex-1">
         <CodeEditor
           path={activeFile}
@@ -231,7 +244,7 @@ export function DebuggerView({ dbg }: Props) {
           <span className="text-xs text-slate-400">Robo Lab: big text, simple words and a robot guide, for first-time coders. Switch to Game or Classic for more tools.</span>
         </div>
         <div className="min-h-0 flex-1">
-          <KidsView dbg={dbg} />
+          <KidsView dbg={dbg} playback={playback} />
         </div>
       </div>
     );
@@ -241,9 +254,10 @@ export function DebuggerView({ dbg }: Props) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="border-b border-slate-800 bg-slate-900/80">
-          <Toolbar dbg={controls} leading={modeSwitch} />
+          <Toolbar dbg={controls} playback={playback} leading={modeSwitch} />
         </div>
         {foreignBanner}
+        {explainer}
         <Toasts game={game} />
         {/* Code on the left, the simulation on the right, side by side and the same size. Phones stack them. */}
         <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 md:auto-rows-auto md:grid-cols-2 md:overflow-hidden">
@@ -266,7 +280,7 @@ export function DebuggerView({ dbg }: Props) {
           </div>
 
           <div className="panel h-[85vh] overflow-hidden md:h-auto md:min-h-0">
-            <GameHUD dbg={dbg} game={game} />
+            <GameHUD dbg={dbg} game={game} playback={playback} />
             <div className="min-h-[52px] shrink-0 border-b border-slate-800 bg-slate-950/80 px-3 py-2" aria-live="polite">
               {event ? (
                 <div className="flex items-start gap-2">
@@ -283,7 +297,7 @@ export function DebuggerView({ dbg }: Props) {
               )}
               {gapNote && <p className="mt-1 text-xs text-slate-400">{gapNote}</p>}
             </div>
-            <div className="min-h-0 flex-1">
+            <div className="min-h-[220px] flex-1">
               <Stage
                 viz={viz}
                 event={event}
@@ -314,7 +328,7 @@ export function DebuggerView({ dbg }: Props) {
                 <span>🧠 AI coach: explain · fix · test {dbg.patch ? `· patch ${dbg.patch.status}` : ''}</span>
                 <span>{aiOpen ? '▼' : '▲'}</span>
               </button>
-              {aiOpen && <div className="h-[340px]">{aiPanel}</div>}
+              {aiOpen && <div className="h-[38vh] max-h-[340px] min-h-[200px]">{aiPanel}</div>}
             </div>
           </div>
         </div>
@@ -322,33 +336,48 @@ export function DebuggerView({ dbg }: Props) {
     );
   }
 
+  // Classic: the code (and its output) on the left, one tabbed panel on the right, so each part has room.
+  const classicTabs: [typeof classicTab, string][] = [
+    ['vars', '🧮 Variables'],
+    ['stack', '📚 Call stack'],
+    ['timeline', '🕒 Timeline'],
+    ['ai', '🧠 AI coach'],
+  ];
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-slate-800 bg-slate-900/80">
-        <Toolbar dbg={controls} />
+        <Toolbar dbg={controls} playback={playback} leading={modeSwitch} />
       </div>
       {foreignBanner}
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/40 px-3 py-1">
-        {modeSwitch}
-        {explainAllToggle}
-        {planToggle}
-        {stepBanner}
-      </div>
-
-      <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 lg:auto-rows-auto lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1.2fr)_minmax(0,1fr)] lg:overflow-hidden">
-        <div className="flex min-h-[340px] flex-col gap-2">
-          <div className="panel min-h-0 flex-1 overflow-hidden">{editor('classic')}</div>
+      {explainer}
+      <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-2 overflow-auto p-2 md:auto-rows-auto md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:overflow-hidden">
+        <div className="flex flex-col gap-2 md:min-h-0">
+          <div className="panel h-[60vh] flex-none overflow-hidden md:h-auto md:min-h-0 md:flex-1">
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/60 px-2 py-1">
+              <span className="mr-auto min-w-0 truncate">{stepBanner ?? <span className="text-xs font-bold uppercase tracking-wide text-slate-400">📜 Code</span>}</span>
+              {explainAllToggle}
+              {planToggle}
+            </div>
+            {editor('classic')}
+          </div>
           <ProgramInput dbg={dbg} />
+          <div className="h-[150px] shrink-0">{consolePanel}</div>
         </div>
-        <div className="grid min-h-[300px] grid-rows-[minmax(0,1.3fr)_minmax(0,0.7fr)] gap-2">
-          <VariableInspector event={event} changed={changed} />
-          <CallStack frames={stale ? [] : stack} onSelectLine={revealLine} />
+        <div className="panel h-[70vh] overflow-hidden md:h-auto md:min-h-0">
+          <div role="tablist" aria-label="Debugger panels" className="flex flex-wrap gap-1 border-b border-slate-800 bg-slate-950/60 px-2 py-1.5">
+            {classicTabs.map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={classicTab === id} className="tab py-1 text-xs" onClick={() => setClassicTab(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 [&>*]:h-full">
+            {classicTab === 'vars' && <VariableInspector event={event} changed={changed} />}
+            {classicTab === 'stack' && <CallStack frames={stale ? [] : stack} onSelectLine={revealLine} />}
+            {classicTab === 'timeline' && <Timeline events={stale ? [] : events} step={step} onSelect={dbg.goTo} />}
+            {classicTab === 'ai' && aiPanel}
+          </div>
         </div>
-        <div className="grid min-h-[260px] grid-cols-1 gap-2 md:grid-cols-2">
-          <Timeline events={stale ? [] : events} step={step} onSelect={dbg.goTo} />
-          {consolePanel}
-        </div>
-        <div className="min-h-[300px]">{aiPanel}</div>
       </div>
     </div>
   );

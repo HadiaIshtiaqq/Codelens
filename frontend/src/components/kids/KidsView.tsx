@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { Debugger } from '../../hooks/useDebugger';
+import type { Pace, Playback } from '../../hooks/usePlayback';
 import { CONCEPTS } from '../../lib/concepts';
 import { KID_EXAMPLES } from '../../lib/kidExamples';
 import { CHALLENGES, type Challenge, type ChallengeResult } from '../../lib/challenges';
@@ -10,6 +11,7 @@ import { hasDrawing } from '../../lib/turtle';
 import { vizAt } from '../../lib/viz';
 import { useCodeExplanation } from '../../hooks/useCodeExplanation';
 import { CodeEditor } from '../CodeEditor';
+import { ProgramExplainer } from '../ProgramExplainer';
 import { ProgramPlan } from '../ProgramPlan';
 import { TurtleStage } from '../TurtleStage';
 import { KidBoard } from './KidBoard';
@@ -19,22 +21,6 @@ const KidsBlocks = lazy(() => import('./KidsBlocks').then((m) => ({ default: m.K
 
 // A new key: the old one was saved as "on" without anyone choosing it. Robo only talks once the speaker is switched on.
 const READ_ALOUD_KEY = 'codelens.kids.speaker';
-const PACE_KEY = 'codelens.kids.pace';
-
-/** How Robo moves through the steps: on its own at some speed, or only when the child presses Next. */
-type Pace = 'slow' | 'normal' | 'fast' | 'manual';
-// Milliseconds to wait on each step: [when not reading aloud, after the sentence has been read aloud].
-const PACE_DELAY: Record<Exclude<Pace, 'manual'>, [number, number]> = { slow: [4000, 1500], normal: [2500, 600], fast: [1100, 150] };
-
-function loadPace(): Pace {
-  try {
-    const saved = localStorage.getItem(PACE_KEY);
-    return saved === 'slow' || saved === 'fast' || saved === 'manual' ? saved : 'normal';
-  } catch {
-    return 'normal';
-  }
-}
-
 function loadReadAloud(): boolean {
   try {
     return localStorage.getItem(READ_ALOUD_KEY) === 'on';
@@ -44,11 +30,11 @@ function loadReadAloud(): boolean {
 }
 
 /** A calm, big-text view for young beginners: one plain-English sentence per step. */
-export function KidsView({ dbg }: { dbg: Debugger }) {
+export function KidsView({ dbg, playback }: { dbg: Debugger; playback: Playback }) {
   const { run, step, stale, total, phase } = dbg;
   const [readAloud, setReadAloud] = useState(loadReadAloud);
-  const [pace, setPace] = useState(loadPace);
-  const [playing, setPlaying] = useState(false);
+  // The player is shared with Game and Classic, so switching views keeps playing from the same step.
+  const { playing, pace, setPace, hold } = playback;
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   const [explainAll, setExplainAll] = useState(false);
   const [blocks, setBlocks] = useState(false);
@@ -61,10 +47,10 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voice, setVoice] = useState(chosenVoiceName);
   const [fixAsked, setFixAsked] = useState(false);
+  const [fullPlan, setFullPlan] = useState(false);
   const plan = useCodeExplanation(dbg.source, 'kid');
 
   useEffect(() => onVoicesChanged(() => setVoices(englishVoices())), []);
-  const timer = useRef<number | null>(null);
 
   const events = run?.events ?? [];
   const event = !stale && run ? events[step] ?? null : null;
@@ -141,15 +127,6 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     dbg.loadProject(c.starter);
   };
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(PACE_KEY, pace);
-    } catch {
-      /* ignore */
-    }
-    if (pace === 'manual') setPlaying(false);
-  }, [pace]);
-
   const toggleReadAloud = (on: boolean) => {
     setReadAloud(on);
     try {
@@ -162,55 +139,55 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
     else if (!event) speak("Hi, I'm Robo! Press Start and I'll read each step to you.");
   };
 
-  // Read each step aloud; while playing, move on when the sentence has been read.
+  // Read each step aloud, holding the player until the sentence is finished; linger on a new idea card.
   useEffect(() => {
-    if (timer.current) window.clearTimeout(timer.current);
     if (!event) return;
-    const advance = () => {
-      if (!playing) return;
-      if (step >= total - 1) {
-        setPlaying(false);
-        return;
-      }
-      const [quiet, afterSpeech] = PACE_DELAY[pace === 'manual' ? 'normal' : pace];
-      // Linger on a new idea card so there is time to read it.
-      const linger = concept ? 2500 : 0;
-      timer.current = window.setTimeout(() => dbg.goTo(step + 1), (readAloud && speechSupported ? afterSpeech : quiet) + linger);
-    };
-    if (readAloud && speechSupported) speak(sentence, advance);
-    else advance();
+    let linger: number | undefined;
+    if (concept && playing) {
+      hold('idea', true);
+      linger = window.setTimeout(() => hold('idea', false), 2500);
+    }
+    if (readAloud && speechSupported) {
+      hold('speech', true);
+      speak(sentence, () => hold('speech', false));
+    }
     return () => {
-      if (timer.current) window.clearTimeout(timer.current);
+      window.clearTimeout(linger);
+      hold('idea', false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event?.step, run, playing, readAloud, pace]);
+  }, [event?.step, run, readAloud]);
 
-  useEffect(() => () => stopSpeaking(), []);
+  useEffect(
+    () => () => {
+      stopSpeaking();
+      hold('speech', false);
+    },
+    [hold],
+  );
 
   const start = async () => {
-    setPlaying(false);
     stopSpeaking();
-    await dbg.execute();
     // Robo walks through the program by itself unless the child chose to press Next each time.
-    setPlaying(pace !== 'manual');
+    await playback.runAndPlay();
   };
 
   // Taking a step by hand pauses the automatic walk-through.
   const stepBy = (move: () => void) => {
-    setPlaying(false);
+    playback.pause();
     move();
   };
 
   // Keyboard: Space plays or pauses, the arrow keys step (not while typing in the code or a box).
-  const keys = useRef({ playing, setPlaying, stepBy, dbg, ready: false });
-  keys.current = { playing, setPlaying, stepBy, dbg, ready: !!run && !stale };
+  const keys = useRef({ playback, stepBy, dbg, ready: false });
+  keys.current = { playback, stepBy, dbg, ready: !!run && !stale };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
       const target = e.target as HTMLElement | null;
       if (!k.ready || e.altKey || e.ctrlKey || e.metaKey) return;
       if (target?.closest('input, textarea, select, button, [contenteditable="true"], .monaco-editor, .blocklySvg, .blocklyWidgetDiv')) return;
-      if (e.key === ' ') k.setPlaying(!k.playing);
+      if (e.key === ' ') k.playback.toggle();
       else if (e.key === 'ArrowRight') k.stepBy(k.dbg.next);
       else if (e.key === 'ArrowLeft') k.stepBy(k.dbg.prev);
       else return;
@@ -236,7 +213,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
             onChange={(e) => {
               const ex = KID_EXAMPLES.find((x) => x.id === e.target.value);
               if (ex) {
-                setPlaying(false);
+                playback.pause();
                 stopSpeaking();
                 setMission(null);
                 setBlocks(false);
@@ -271,10 +248,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
         </button>
         <button
           className={`${bigButton} ${playing ? 'border-orange-400 bg-orange-600' : 'border-violet-400 bg-violet-700 hover:bg-violet-600'}`}
-          onClick={() => {
-            if (!playing && step >= total - 1) dbg.goTo(0);
-            setPlaying(!playing);
-          }}
+          onClick={playback.toggle}
           disabled={!run || stale || total < 2}
           aria-pressed={playing}
         >
@@ -561,7 +535,7 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
                       className="rounded-xl border-2 border-emerald-300 bg-emerald-700 px-3 py-1 text-base font-bold hover:bg-emerald-600"
                       onClick={() => {
                         dbg.goTo(0);
-                        setPlaying(pace !== 'manual');
+                        playback.play();
                       }}
                     >
                       🔁 Watch again
@@ -657,7 +631,26 @@ export function KidsView({ dbg }: { dbg: Debugger }) {
                   if (target >= 0) dbg.goTo(target);
                 }}
               />
-              <p className="mt-2 text-sm text-emerald-200/80">Tip: point at any line or word in the code to see what it means.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  className="rounded-xl border-2 border-emerald-400 bg-emerald-700 px-3 py-1.5 text-base font-bold hover:bg-emerald-600"
+                  onClick={() => setFullPlan(true)}
+                  aria-haspopup="dialog"
+                >
+                  📄 Every line, explained
+                </button>
+                <p className="text-sm text-emerald-200/80">Tip: point at any line or word in the code to see what it means.</p>
+              </div>
+              {fullPlan && (
+                <ProgramExplainer
+                  source={dbg.source}
+                  plan={plan}
+                  level="kid"
+                  currentLine={event && (event.file ?? 'main.py') === 'main.py' ? event.line : null}
+                  onLine={() => setFullPlan(false)}
+                  onClose={() => setFullPlan(false)}
+                />
+              )}
             </div>
           </details>
 
