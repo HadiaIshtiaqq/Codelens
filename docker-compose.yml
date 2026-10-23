@@ -31,6 +31,8 @@ services:
     environment:
       CODELENS_SANDBOX: docker
       CODELENS_CORS_ORIGINS: ${CODELENS_CORS_ORIGINS:-http://localhost:8000}
+      # /mcp (Alexa+ and the in-app simulator) answers to these host names; behind the https profile that's your domain.
+      CODELENS_MCP_PUBLIC_HOSTS: ${CODELENS_MCP_PUBLIC_HOSTS:-${CODELENS_DOMAIN:-}}
     # The app runs as a non-root user; this group lets it use the host's Docker socket.
     # Linux: DOCKER_GID=$(getent group docker | cut -d: -f3) docker compose up -d   (Docker Desktop: 0)
     group_add:

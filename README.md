@@ -3,6 +3,11 @@
 A Python debugging and reverse-engineering workspace:
 
 - **Trace** Python in a sandbox with `sys.settrace`: every call, line, return, exception and print, with variable snapshots.
+- **🔵 Alexa+ simulator:** say "Alexa, run my code", "why did it crash?", "what is total?", "fix it" or "test the fix".
+  - Each question becomes a real MCP tool call over Streamable HTTP to the CodeLens MCP server (protocol 2025-11-25 or later).
+  - The answer comes back as speech plus a visual card.
+  - A live panel shows every MCP request and response.
+- **🐢 Turtle drawing:** `import turtle` works in the sandbox, and the picture is drawn step by step with the code, in Kids mode and on Game mode's Drawing board. It was designed after studying Scratch's pen and motion engine with REA ([`docs/REA_SCRATCH_STUDY.md`](docs/REA_SCRATCH_STUDY.md)).
 - **🧸 Kids mode (the default)**, built for an 8-year-old with no coding experience:
   - Every step is one plain sentence about what just happened: "📦 Make a new box called apples: 3", "🔁 Loop: take the next one from the pets box. pet is “dog”", "❓ Question: is the temperature box bigger than 25? Yes!".
   - Values are shown as labeled cardboard boxes, and lists as trains with numbered cars.
@@ -127,6 +132,7 @@ The CodeLens MCP server exposes 18 tools over the REST API:
 | Debugging & conversion | `convert_code`, `run_python`, `get_trace`, `get_step_state`, `get_source`, `explain_execution`, `propose_patch`, `validate_patch` |
 | Reverse engineering | `rea_analyze_javascript_application`, `rea_list_tools`, `rea_tool_schema`, `rea_call_tool` |
 
+- **Same server, `/mcp`:** the main app serves the MCP server at `http://<host>:8000/mcp` (Streamable HTTP), guarded like the REST API. The in-app Alexa+ simulator uses it. For a public deployment, set `CODELENS_ACCESS_CODE`, put the app behind HTTPS and list your domain in `CODELENS_MCP_PUBLIC_HOSTS`.
 - **Claude Code:** the repo's [`.mcp.json`](.mcp.json) registers the server automatically when you open the project, on Windows, macOS or Linux (it runs `scripts/mcp.mjs`, which finds the backend's Python). Keep the API running on port 8000.
 - **Remote agents / Alexa+ (Streamable HTTP, endpoint `/mcp`):**
   ```powershell
@@ -170,6 +176,18 @@ CI (`.github/workflows/ci.yml`) runs all three on every push, including the Dock
 | POST | `/api/v1/rea/javascript` · `/api/v1/rea/tools/call` | JS/Electron analysis, any REA tool |
 
 ## Hackathon checklist
+
+**Build, Ship, Shape: Amazon Developer Hackathon** (Alexa+ track). Draft Devpost answers are in [`SUBMISSION.md`](SUBMISSION.md).
+
+| Requirement | Where |
+| --- | --- |
+| Self-hosted MCP server, spec 2025-11-25+, Streamable HTTP | `backend/app/mcp_server.py`, served at `/mcp` by `backend/app/main.py`; tests: `backend/tests/test_mcp_http.py` |
+| The repo calls the track's technology in code | MCP server entry points above; browser MCP client `frontend/src/lib/mcpClient.ts` |
+| Simulated Alexa+ experience (source included) | `frontend/src/components/AlexaView.tsx` (🔵 Alexa+ tab) |
+| Open-source license | [`LICENSE`](LICENSE) (MIT) |
+| Product feedback, friction log (bonus) | [`SUBMISSION.md`](SUBMISSION.md), [`FRICTION_LOG.md`](FRICTION_LOG.md) |
+
+**Nebius × NVIDIA:**
 
 | Requirement | Where |
 | --- | --- |

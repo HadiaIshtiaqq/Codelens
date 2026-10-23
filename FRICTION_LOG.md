@@ -15,12 +15,32 @@ Problems hit while building CodeLens AI + REA, with what we did about them. Entr
 | R7 | 207 MCP tools, including debuggers, Frida and write-back tools. | Exposing all of them to a web UI or a voice agent is risky | **Positive:** REA sets MCP `destructiveHint` annotations accurately, so we block destructive tools by default (`REA_ALLOW_DESTRUCTIVE=1` to enable) and confine path arguments to `rea-workspace/`. |
 | R8 | MCP server startup is ~2 s. | A fresh session per call made tool calls slow | One persistent stdio session on a background event loop. |
 
+### R9 (2026-10-23): analysing a large real-world package
+
+- **Task:** study Scratch's drawing engine (`scratch-vm` 5.0.300, 25 MB unpacked) with REA, to design the turtle stage.
+- **Steps:** `npm pack scratch-vm`, extract into `rea-workspace/`, then call the MCP tool `rea_analyze_javascript_application` on `scratch-vm-pkg/package`, then on `…/package/src`.
+- **Expected:** an analysis, or an error saying the input was too large.
+- **Actual:** both calls returned only `Error executing tool rea_analyze_javascript_application`, with no reason. The CLI on a single extension folder (`src/extensions/scratch3_pen`) worked in seconds.
+- **Severity:** medium (blocked until we guessed it was about size).
+- **Workaround:** analyse the two relevant folders separately with the CLI (evidence ids in `docs/REA_SCRATCH_STUDY.md`).
+- **Suggestion:** include the failing phase and any size or time limit in the MCP error text, and offer an include-glob parameter for big packages.
+
 ## MCP Python SDK (`mcp` 2.3.0)
 
 | # | Friction | Workaround |
 | --- | --- | --- |
 | M1 | `from mcp.server.fastmcp import FastMCP` raises in 2.x; it was renamed to `MCPServer` (`mcp.server.mcpserver`). The error message links the migration guide, which helped. | Use `MCPServer`. |
 | M2 | Streamable HTTP rejects non-localhost `Host` headers (HTTP 421, DNS-rebinding protection), which would block a public tunnel URL for Alexa+. | Pass `TransportSecuritySettings(allowed_hosts=…)` from `CODELENS_MCP_PUBLIC_HOSTS`, keeping protection on. |
+
+### M3 (2026-10-23): mounting Streamable HTTP inside the existing FastAPI app
+
+- **Task:** serve the MCP server at `/mcp` on the main web server, so Alexa+ and the in-app simulator share one host and port.
+- **Steps:** `app.mount("/mcp", mcp.streamable_http_app(...))` and `async with mcp.session_manager.run()` in the FastAPI lifespan. Then run the test suite, which starts the app several times.
+- **Expected:** each app start runs the session manager again.
+- **Actual:** `RuntimeError: StreamableHTTPSessionManager .run() can only be called once per instance` on the second start. Separately, a test that opened its own app lifespan closed the shared test database on exit, failing 24 other tests.
+- **Severity:** medium (production starts once; tests and dev reloads start many times).
+- **Workaround:** a tiny ASGI wrapper rebuilds `streamable_http_app()` (and so a fresh session manager) at every startup (`_McpEndpoint` in `backend/app/main.py`); tests use the shared client fixture.
+- **Suggestion:** make the session manager restartable, or document a "mount into an existing app" helper that owns this.
 
 ## Nebius Token Factory — **TODO: fill in during the real integration**
 
@@ -35,9 +55,13 @@ Things to record when the real key is used:
 - Was `response_format: {"type": "json_object"}` honoured? Did the model wrap JSON in `<think>` blocks or code fences? (The parser tolerates both.)
 - Latency from `POST /api/v1/ai/selftest`, rate limits, error formats.
 
-## AWS / Alexa+ — **TODO**
+## Alexa+ — **TODO: fill in when connecting the real Alexa+ preview**
 
-No AWS services have been used yet. Record the friction of exposing `python -m app.mcp_server --http` publicly (tunnel or hosting, TLS, `CODELENS_MCP_TOKEN`) and of connecting it to Alexa+.
+Done so far: the MCP server is served at `https://<host>/mcp` (Streamable HTTP, protocol 2025-11-25 or later), and the in-app Alexa+ simulator drives it over the same protocol. Record here the task, steps, expected against actual, severity, workaround and suggestion for: registering the endpoint with Alexa+, authentication, how utterances reach the tools, and latency.
+
+## AWS — not used
+
+No AWS services are used yet.
 
 ## Other tooling
 
