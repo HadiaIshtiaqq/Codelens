@@ -197,8 +197,16 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
         dbg.setSource(lastPatch.patched_source);
         return say("Done. I put the fixed code in your editor. Say run my code to try it.", viaVoice);
       }
+      case 'ask': {
+        // Open questions are answered from the code itself, and Lexi can show the main line.
+        const res = await client.callTool<{ speech: string; line: number | null }>('ask_about_code', {
+          source_code: dbg.source,
+          question: intent.question,
+        });
+        return say(res.speech, viaVoice, { tool: 'ask_about_code', line: res.line ?? undefined });
+      }
       default:
-        return say("I'm your coding helper, so I can only answer questions about the code in your editor. Try one of the buttons below.", viaVoice);
+        return say('Ask me about your code: run it, why it crashed, what a variable is, or how a part of it works.', viaVoice);
     }
   };
 

@@ -26,7 +26,15 @@ describe('Alexa+ simulator intents', () => {
     expect(parseIntent('check my code')).toEqual({ kind: 'run' });
     expect(parseIntent('does it work')).toEqual({ kind: 'run' });
     expect(parseIntent("where's the bug")).toEqual({ kind: 'show' });
-    expect(parseIntent('sing me a song')).toEqual({ kind: 'unknown' });
+    expect(parseIntent('sing me a song')).toEqual({ kind: 'ask', question: 'sing me a song' });
+    expect(parseIntent('how to calculate the path cause according to the code')).toEqual({
+      kind: 'ask',
+      question: 'how to calculate the path cause according to the code',
+    });
+    expect(parseIntent('how is the cost worked out')).toEqual({ kind: 'ask', question: 'how is the cost worked out' });
+    expect(parseIntent('what does visited do')).toEqual({ kind: 'ask', question: 'what does visited do' });
+    expect(parseIntent('what does my code do')).toEqual({ kind: 'run' });
+    expect(parseIntent('')).toEqual({ kind: 'unknown' });
   });
 
   it('finds variables, including names spoken as separate words', () => {

@@ -100,3 +100,17 @@ def test_typos_and_off_by_one_are_flagged_before_running():
     assert len(off) == 1 and off[0]["line"] == 2 and "range(len(xs))" in off[0]["text"]
     clean = "import math\n\ndef area(r):\n    return math.pi * r ** 2\n\ntry:\n    print(area(2))\nexcept ValueError as e:\n    print(e)\n"
     assert explain_program(clean, "classic")["warnings"] == []
+
+
+def test_open_questions_are_answered_from_the_code():
+    from app.services.code_answers import answer
+
+    src = ("def total(xs):\n    result = 0\n    for x in xs:\n        result += x\n    return result\n\n"
+           "visited = set()\nvisited.add(1)\nprint(total([1, 2]))\n")
+    r = answer(src, "how is the result calculated?")
+    assert r["found"] and r["line"] == 2 and "result" in r["speech"]
+    assert [p["line"] for p in r["lines"]] == [2, 4, 5]
+    v = answer(src, "what does visited do")
+    assert v["found"] and "visited" in v["speech"] and v["line"] == 7
+    off = answer(src, "Barbie Tiktok")
+    assert not off["found"] and off["line"] is None and "couldn't find anything" in off["speech"]

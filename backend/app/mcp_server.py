@@ -238,6 +238,15 @@ async def explain_code(source_code: str, question: Optional[str] = None) -> dict
     return {"speech": speech, "execution_id": run["execution_id"], "run": run, "explanation": exp}
 
 
+@mcp.tool(description="Voice-friendly: answer an open question about how the code works (\"how is the path "
+                      "calculated?\", \"what does visited do?\") from the code itself, without running it. Returns "
+                      "`speech`, the relevant lines with their explanations, and the main line to point at.")
+async def ask_about_code(source_code: str, question: str) -> dict[str, Any]:
+    from app.services.code_answers import answer
+
+    return answer(source_code, question)
+
+
 @mcp.tool(description="Voice-friendly: where the program is at a step (default: the failing or last step): line, "
                       "function, call stack and variables, with a `speech` summary.")
 async def get_execution_state(execution_id: str, step: Optional[int] = None) -> dict[str, Any]:

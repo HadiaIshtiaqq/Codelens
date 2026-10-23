@@ -8,6 +8,8 @@ export type Intent =
   | { kind: 'variable'; name: string }
   | { kind: 'state'; step?: number }
   | { kind: 'show' }
+  /** Any other question about the code ("how is the path calculated?"), answered from the code itself. */
+  | { kind: 'ask'; question: string }
   | { kind: 'fix' }
   | { kind: 'validate' }
   | { kind: 'apply' }
@@ -65,8 +67,12 @@ export function parseIntent(utterance: string, variables: string[] = []): Intent
 
   if (/\b(where (are we|is it|did it stop|is the program)|what line|which line|current line)\b/.test(text)) return { kind: 'state' };
   if (/\b(why|what went wrong|wrong|crash|crashed|error|bug|broken|fail|failed|summar|debug|problem|what happened|not working|doesn'?t work|isn'?t working)\b/.test(text)) return { kind: 'summary' };
+  // "How is the path calculated?" is about one part of the code, not "run the whole thing".
+  if (/\b(how (is|are|does|do) (the )?\w+|what does \w+ do|what is \w+ for|why (is|does) \w+)\b/.test(text) && !/\b(my code|the code|the program|it)\b\s*(do|work)?$/.test(text)) {
+    return { kind: 'ask', question: text };
+  }
   if (/\b(run|execute|start|try|explain|what does|what is my code|how does|go|test my code|check my code|does it work|what happens|play)\b/.test(text)) return { kind: 'run' };
-  return { kind: 'unknown' };
+  return { kind: 'ask', question: text };
 }
 
 export const SUGGESTIONS = ['Run my code', 'Why did it crash?', 'Fix it', 'Test the fix', 'Where did it stop?', 'What can you do?'];
