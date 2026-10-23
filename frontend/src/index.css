@@ -70,7 +70,7 @@
     @apply rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 text-sm text-slate-100 transition placeholder:text-slate-500 hover:border-white/20 focus:border-sky-400/60;
   }
   .tab {
-    @apply rounded-full px-3.5 py-1.5 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-slate-100 aria-selected:bg-gradient-to-r aria-selected:from-indigo-600/90 aria-selected:to-sky-600/90 aria-selected:text-white aria-selected:shadow-[0_0_16px_rgba(56,189,248,0.25)];
+    @apply whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-slate-100 aria-selected:bg-gradient-to-r aria-selected:from-indigo-600/90 aria-selected:to-sky-600/90 aria-selected:text-white aria-selected:shadow-[0_0_16px_rgba(56,189,248,0.25)];
   }
   .kbd {
     @apply rounded border border-white/15 bg-slate-900/60 px-1 font-mono text-[10px] text-slate-300;
