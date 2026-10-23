@@ -111,6 +111,7 @@ Copy `backend/.env.example` to `backend/.env`. The main settings:
 | Variable | Purpose |
 | --- | --- |
 | `CODELENS_SANDBOX` | `docker` (production) or `subprocess` (dev) |
+| `GEMINI_API_KEY` | Enables Google Gemini (free tier: get a key at aistudio.google.com/apikey). Alexa's open questions, explanations and fixes then come from the AI, grounded in the code and the trace. Leave `GEMINI_MODEL` empty to pick the newest Flash model |
 | `NEBIUS_API_KEY` | Enables Nebius Token Factory. Leave `NEBIUS_MODEL` empty to auto-pick a Nemotron model from your account's `/models` list |
 | `OLLAMA_MODEL` | Use a local Ollama model instead |
 | `CODELENS_LLM_PROVIDER` | `auto` (default), `nebius`, `ollama`, or `offline` |

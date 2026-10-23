@@ -1,6 +1,6 @@
-"""LLM adapter for Nebius Token Factory and Ollama (spec §2.1, §2.3.2, §3.3).
+"""LLM adapter for Nebius Token Factory, Google Gemini and Ollama (spec §2.1, §2.3.2, §3.3).
 
-Both providers are called through their OpenAI-compatible Chat Completions
+All providers are called through their OpenAI-compatible Chat Completions
 endpoints with JSON-object output. Responses are validated against a schema; any
 transport, HTTP or schema failure raises LLMError so callers can degrade to the
 offline engine.
@@ -26,7 +26,7 @@ class LLMError(RuntimeError):
 
 @dataclass
 class Provider:
-    name: str  # "nebius" | "ollama" | "offline"
+    name: str  # "nebius" | "gemini" | "ollama" | "offline"
     model: Optional[str] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
@@ -37,6 +37,8 @@ def select_provider(settings: Settings) -> Provider:
     if choice == "auto":
         if settings.nebius_api_key:
             choice = "nebius"
+        elif settings.gemini_api_key:
+            choice = "gemini"
         elif settings.ollama_model:
             choice = "ollama"
         else:
@@ -47,6 +49,10 @@ def select_provider(settings: Settings) -> Provider:
         # An empty NEBIUS_MODEL means: discover a Nemotron model from the live /models catalogue.
         return Provider("nebius", settings.nebius_model or None, settings.nebius_base_url.rstrip("/"),
                         settings.nebius_api_key)
+    if choice == "gemini":
+        if not settings.gemini_api_key:
+            raise ValueError("CODELENS_LLM_PROVIDER=gemini requires GEMINI_API_KEY")
+        return Provider("gemini", settings.gemini_model or None, settings.gemini_base_url.rstrip("/"), settings.gemini_api_key)
     if choice == "ollama":
         return Provider("ollama", settings.ollama_model or "qwen2.5-coder:7b", settings.ollama_base_url.rstrip("/") + "/v1")
     if choice == "offline":
@@ -98,8 +104,22 @@ Return JSON with exactly these keys:
 Keep everything that is not part of the fix byte-for-byte identical (names, comments, formatting)."""
 
 
-def choose_model(model_ids: list[str]) -> Optional[str]:
-    """Pick the best NVIDIA Nemotron text model from a provider catalogue."""
+def choose_model(model_ids: list[str], provider: str = "nebius") -> Optional[str]:
+    """Pick a model from a provider catalogue: a Nemotron text model on Nebius, the newest Flash on Gemini."""
+    if provider == "gemini":
+        def gemini_score(mid: str) -> tuple:
+            low = mid.lower()
+            version = re.search(r"gemini-(\d+(?:\.\d+)?)", low)
+            return (
+                "flash" in low,
+                not any(t in low for t in ("lite", "image", "tts", "audio", "live", "embed", "thinking", "exp", "preview")),
+                float(version.group(1)) if version else 0.0,
+            )
+
+        texts = [m.removeprefix("models/") for m in model_ids if "gemini" in m.lower()]
+        ranked = sorted(texts, key=gemini_score, reverse=True)
+        return ranked[0] if ranked else None
+
     def score(mid: str) -> tuple:
         low = mid.lower()
         return (
@@ -112,6 +132,22 @@ def choose_model(model_ids: list[str]) -> Optional[str]:
 
     ranked = sorted(model_ids, key=score, reverse=True)
     return ranked[0] if ranked else None
+
+
+ASK_SYSTEM_PROMPT = """You are Alexa, a friendly voice assistant that helps people understand their Python code.
+You are given the user's code with line numbers, a plain-English note for each line, and, when available, what
+happened when the code ran. Answer like a great teacher speaking out loud: clear, specific and correct.
+Rules:
+- Ground every claim in the code and run facts you were given. Never invent variables, lines, values or output.
+- Refer to lines as "line N" using the numbers shown.
+- If the question asks for something the code does not do (for example printing a value it never prints),
+  say so plainly and say what line to add or change, with the exact code.
+- If the question has nothing to do with the code, say briefly that you can only help with this code.
+- Spoken style: 2 to 5 short sentences, no markdown, no bullet points, no code blocks (inline code is fine).
+Respond with a single JSON object."""
+
+ASK_INSTRUCTIONS = """Return JSON with exactly these keys:
+{"speech": "the spoken answer", "line": the single most relevant line number in the code, or null}"""
 
 
 class LLMClient:
@@ -143,7 +179,7 @@ class LLMClient:
     async def ensure_model(self) -> str:
         """Resolve the model once (shared Provider object, so /health shows it too)."""
         if not self.provider.model:
-            chosen = choose_model(await self.list_models())
+            chosen = choose_model(await self.list_models(), self.provider.name)
             if not chosen:
                 raise LLMError(f"{self.provider.name} offers no models for this API key")
             self.provider.model = chosen
@@ -176,6 +212,16 @@ class LLMClient:
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"{p.name} returned an unexpected response shape") from exc
         return _extract_json(content)
+
+    async def answer_question(self, context: str, question: str) -> dict[str, Any]:
+        """A short spoken answer to a question about the user's code: {"speech": str, "line": int | None}."""
+        prompt = f"{context}\n\nQUESTION (spoken to Alexa): {question}\n\n{ASK_INSTRUCTIONS}"
+        data = await self._chat_json(prompt, system=ASK_SYSTEM_PROMPT, max_tokens=1024)
+        speech = str(data.get("speech") or "").strip()
+        if not speech:
+            raise LLMError("answer had no speech")
+        line = data.get("line")
+        return {"speech": speech, "line": line if isinstance(line, int) else None}
 
     async def ping(self) -> dict[str, Any]:
         """Smallest possible round-trip, used to prove the provider is live."""

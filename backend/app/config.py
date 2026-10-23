@@ -88,6 +88,12 @@ class Settings:
         # Empty = auto-select a Nemotron model from the live /models catalogue.
         default_factory=lambda: os.getenv("NEBIUS_MODEL", "")
     )
+    # Google Gemini through its OpenAI-compatible endpoint (free tier keys from aistudio.google.com).
+    gemini_api_key: str = field(default_factory=lambda: os.getenv("GEMINI_API_KEY", ""))
+    gemini_base_url: str = field(
+        default_factory=lambda: os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
+    )
+    gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", ""))  # empty: pick a Flash model
     ollama_base_url: str = field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
     ollama_model: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", ""))
     # Hackathon/production: never silently fall back to offline rules when the provider fails.

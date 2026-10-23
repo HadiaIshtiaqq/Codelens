@@ -241,10 +241,10 @@ async def explain_code(source_code: str, question: Optional[str] = None) -> dict
 @mcp.tool(description="Voice-friendly: answer an open question about how the code works (\"how is the path "
                       "calculated?\", \"what does visited do?\") from the code itself, without running it. Returns "
                       "`speech`, the relevant lines with their explanations, and the main line to point at.")
-async def ask_about_code(source_code: str, question: str) -> dict[str, Any]:
-    from app.services.code_answers import answer
-
-    return answer(source_code, question)
+async def ask_about_code(source_code: str, question: str, execution_id: Optional[str] = None) -> dict[str, Any]:
+    # The API answers with the AI when one is configured, otherwise from the code's own structure.
+    return await _call("POST", "/api/v1/ask", json={"source_code": source_code, "question": question,
+                                                    "execution_id": execution_id})
 
 
 @mcp.tool(description="Voice-friendly: where the program is at a step (default: the failing or last step): line, "

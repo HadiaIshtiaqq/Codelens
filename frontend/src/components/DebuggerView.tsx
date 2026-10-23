@@ -7,6 +7,7 @@ import { ProgramExplainer } from './ProgramExplainer';
 import { detectNonPython } from '../lib/detect';
 import { callStackAt, changedVariables, stdoutUpTo } from '../lib/trace';
 import { hasDrawing } from '../lib/turtle';
+import { speak, speechSupported, stopSpeaking } from '../lib/speech';
 import { vizAt } from '../lib/viz';
 import { CallStack } from './CallStack';
 import { CodeEditor } from './CodeEditor';
@@ -144,6 +145,44 @@ export function DebuggerView({ dbg }: Props) {
         </button>
       ))}
     </div>
+  );
+
+  // Classic's speaker: reads each step's explanation aloud, holding the player until it is finished.
+  const [classicSpeaker, setClassicSpeaker] = useState(() => {
+    try {
+      return localStorage.getItem('codelens.classic.read-aloud') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const { hold } = playback;
+  useEffect(() => {
+    if (mode !== 'classic' || !classicSpeaker || !speechSupported || !event?.narration) {
+      hold('classic-speech', false);
+      return;
+    }
+    hold('classic-speech', true);
+    speak(event.narration, () => hold('classic-speech', false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, classicSpeaker, event?.step, run]);
+  const speakerToggle = speechSupported && (
+    <button
+      className={`btn px-2 py-0.5 text-xs ${classicSpeaker ? 'border-cyan-400 bg-cyan-500/20' : ''}`}
+      aria-pressed={classicSpeaker}
+      onClick={() => {
+        const on = !classicSpeaker;
+        setClassicSpeaker(on);
+        try {
+          localStorage.setItem('codelens.classic.read-aloud', on ? 'on' : 'off');
+        } catch {
+          /* ignore */
+        }
+        if (!on) stopSpeaking();
+      }}
+      title="Read each step's explanation aloud"
+    >
+      🔊 {classicSpeaker ? 'Reading aloud' : 'Read aloud'}
+    </button>
   );
 
   const explainAllToggle = (
@@ -355,6 +394,7 @@ export function DebuggerView({ dbg }: Props) {
           <div className="panel h-[60vh] flex-none overflow-hidden md:h-auto md:min-h-0 md:flex-1">
             <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/60 px-2 py-1">
               <span className="mr-auto min-w-0 truncate">{stepBanner ?? <span className="text-xs font-bold uppercase tracking-wide text-slate-400">📜 Code</span>}</span>
+              {speakerToggle}
               {explainAllToggle}
               {planToggle}
             </div>

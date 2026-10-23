@@ -44,7 +44,7 @@ def answer(source: str, question: str) -> dict[str, Any]:
     code_lines = source.splitlines()
     scored: list[tuple[int, int]] = []
     notes = {int(k): v for k, v in plan["line_notes"].items()}
-    for line, note in notes.items():
+    for line in notes:
         code = code_lines[line - 1] if line <= len(code_lines) else ""
         # Match the code itself; the notes' stock phrases ("stores the result in…") would match anything.
         have = _words(code)
@@ -61,6 +61,9 @@ def answer(source: str, question: str) -> dict[str, Any]:
                       "a line, or why it crashed.",
             "lines": [], "line": None, "found": False,
         }
+    # Words the code never mentions ("print the path" when there is no path): say so first.
+    in_code = _words(source)
+    missing = sorted(spoken[w] for w in wanted - in_code if spoken.get(w) and len(w) > 2)
     best = max(score for score, _ in scored)
     chosen = sorted(line for score, line in scored if score >= max(1, best - 1))[:4]
     picked = [{"line": ln, "code": code_lines[ln - 1].strip(), "note": notes[ln]} for ln in chosen]
@@ -68,4 +71,6 @@ def answer(source: str, question: str) -> dict[str, Any]:
     topic = " and ".join(sorted(spoken[w] for w in matched)[:3]) or "that"
     steps = " ".join(f"Line {p['line']}: {p['note']}" for p in picked)
     speech = f"Here is how your code handles {topic}. {steps}"
+    if missing:
+        speech = f"Your code doesn't have anything called {' or '.join(missing)} yet. " + speech
     return {"speech": speech, "lines": picked, "line": chosen[0], "found": True}

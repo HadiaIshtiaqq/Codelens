@@ -199,11 +199,13 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
       }
       case 'ask': {
         // Open questions are answered from the code itself, and Lexi can show the main line.
-        const res = await client.callTool<{ speech: string; line: number | null }>('ask_about_code', {
+        const res = await client.callTool<{ speech: string; line: number | null; source: 'ai' | 'rules'; provider: string }>('ask_about_code', {
           source_code: dbg.source,
           question: intent.question,
+          ...(lastRun ? { execution_id: lastRun.execution_id } : {}),
         });
-        return say(res.speech, viaVoice, { tool: 'ask_about_code', line: res.line ?? undefined });
+        const via = res.source === 'ai' ? `ask_about_code · answered by ${res.provider}` : 'ask_about_code · from the code (AI offline)';
+        return say(res.speech, viaVoice, { tool: via, line: res.line ?? undefined });
       }
       default:
         return say('Ask me about your code: run it, why it crashed, what a variable is, or how a part of it works.', viaVoice);

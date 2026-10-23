@@ -284,3 +284,46 @@ def test_syntax_fix_through_patch_api(client):
     patch = client.post("/api/v1/patches", json={"execution_id": exec_id}).json()
     assert patch["patched_source"].startswith("for i in range(3):\n")
     assert "needs a ':'" in patch["rationale"]
+
+
+# --------------------------------------------------------------------------- /ask (Alexa's open questions)
+
+def test_ask_uses_the_ai_with_the_code_and_checks_its_line(client, llm_app):
+    seen = {}
+
+    def handler(request: httpx.Request):
+        body = json.loads(request.content)
+        seen["prompt"] = body["messages"][1]["content"]
+        return _reply({"speech": "Your code never builds a path. Add path = [start] on line 2.", "line": 99})
+
+    _mock_llm(llm_app, handler)
+    src = 'print("Hello!")\nname = "Mia"\n'
+    body = client.post("/api/v1/ask", json={"source_code": src, "question": "how do I print the path?"}).json()
+    assert body["source"] == "ai" and body["speech"].startswith("Your code never builds a path")
+    assert body["line"] is None  # line 99 doesn't exist: not passed on
+    assert '1 | print("Hello!")' in seen["prompt"] and "has not been run" in seen["prompt"]
+
+
+def test_ask_falls_back_to_the_code_when_the_ai_fails(client, llm_app):
+    _mock_llm(llm_app, lambda request: httpx.Response(503, text="busy"))
+    body = client.post("/api/v1/ask", json={"source_code": "total = 1\nprint(total)\n", "question": "what is total for"}).json()
+    assert body["source"] == "rules" and "total" in body["speech"] and "provider_error" in body
+
+
+def test_ask_without_ai_says_what_the_code_lacks(client):
+    body = client.post("/api/v1/ask", json={"source_code": 'print("Hi")\n', "question": "how to print the path"}).json()
+    assert body["source"] == "rules" and body["speech"].startswith("Your code doesn't have anything called path")
+
+
+def test_gemini_is_picked_automatically_and_uses_a_flash_model():
+    import dataclasses
+
+    from app.config import get_settings
+    from app.services.llm import choose_model, select_provider
+
+    settings = dataclasses.replace(get_settings(), llm_provider="auto", nebius_api_key="", gemini_api_key="g-key")
+    provider = select_provider(settings)
+    assert provider.name == "gemini" and provider.base_url.endswith("/v1beta/openai") and provider.api_key == "g-key"
+    ids = ["models/gemini-2.0-flash", "models/gemini-2.5-flash", "models/gemini-2.5-flash-lite", "models/gemini-2.5-pro",
+           "models/text-embedding-004", "models/gemini-2.5-flash-preview-tts"]
+    assert choose_model(ids, "gemini") == "gemini-2.5-flash"
