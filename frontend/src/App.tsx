@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { ACCESS_DENIED_EVENT, api, getAccessCode, setAccessCode } from './api/client';
 import type { Health } from './api/types';
+import { CompanionLayer, CompanionProvider } from './components/Companion';
 import { DebuggerView } from './components/DebuggerView';
 import { useDebugger } from './hooks/useDebugger';
 import { setTheme, useTheme } from './lib/theme';
@@ -111,8 +112,10 @@ export default function App() {
   ];
 
   return (
+    <CompanionProvider onShowCode={() => setView('debugger')}>
     <div className="flex h-full min-h-0 flex-col">
       {locked && <AccessGate onUnlocked={() => setLocked(false)} />}
+      <CompanionLayer view={view} enabled={visited.has('alexa')} onGoAlexa={() => setView('alexa')} />
       <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-slate-950/70 px-4 py-2 backdrop-blur-xl">
         <h1 className="group flex items-center gap-2 text-lg font-extrabold tracking-tight">
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-cyan-400 to-sky-600 shadow-[0_0_16px_rgba(34,211,238,0.4)] transition group-hover:rotate-6">
@@ -184,5 +187,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </CompanionProvider>
   );
 }

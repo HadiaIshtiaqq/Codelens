@@ -1,6 +1,7 @@
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useEffect, useRef } from 'react';
 import { registerHoverProvider, setHoverNotes } from '../lib/hover';
+import { registerEditor } from '../lib/editorRegistry';
 import { useTheme } from '../lib/theme';
 import { monaco } from '../lib/monaco';
 
@@ -34,6 +35,8 @@ interface Props {
 export function CodeEditor({ path = 'main.py', value, onChange, activeLine, failLine, citedLines, onRun, revealRequest, variant = 'classic', onLineClick, inlineNote, lineNotes, breakpoints, onToggleBreakpoint, fontSize = 14, hoverNotes }: Props) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const decorations = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
+  const unregister = useRef<(() => void) | null>(null);
+  useEffect(() => () => unregister.current?.(), []);
   const runRef = useRef(onRun);
   runRef.current = onRun;
   const lineClickRef = useRef(onLineClick);
@@ -50,6 +53,7 @@ export function CodeEditor({ path = 'main.py', value, onChange, activeLine, fail
 
   const onMount: OnMount = (editor) => {
     editorRef.current = editor as unknown as monaco.editor.IStandaloneCodeEditor;
+    unregister.current = registerEditor(editorRef.current); // so Lexi can point at lines
     decorations.current = editor.createDecorationsCollection([]);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current());
     editor.onMouseDown((e) => {

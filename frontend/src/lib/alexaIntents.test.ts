@@ -18,6 +18,8 @@ describe('Alexa+ simulator intents', () => {
     expect(parseIntent('where did it stop')).toEqual({ kind: 'state' });
     expect(parseIntent('what happened at step three')).toEqual({ kind: 'state', step: 2 });
     expect(parseIntent('what can you do')).toEqual({ kind: 'help' });
+    expect(parseIntent('show me the error')).toEqual({ kind: 'show' });
+    expect(parseIntent("where's the bug")).toEqual({ kind: 'show' });
     expect(parseIntent('sing me a song')).toEqual({ kind: 'unknown' });
   });
 

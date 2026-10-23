@@ -3,6 +3,8 @@ import type { Debugger } from '../hooks/useDebugger';
 import { parseIntent, SUGGESTIONS, type Intent } from '../lib/alexaIntents';
 import { McpClient, MCP_PROTOCOL_VERSION, type McpLogEntry } from '../lib/mcpClient';
 import { speak, speechSupported, stopSpeaking } from '../lib/speech';
+import { useCompanion } from './Companion';
+import { Lexi } from './Lexi';
 
 // A simulated Alexa+ device. Everything it knows comes from the CodeLens MCP server, reached
 // over Streamable HTTP exactly as Alexa+ reaches an MCP integration; the right-hand panel shows
@@ -16,6 +18,8 @@ interface Turn {
   text: string;
   tool?: string;
   card?: Card;
+  /** The code line this answer is about, so Lexi can point at it. */
+  line?: number;
 }
 
 type Card =
@@ -66,6 +70,14 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const conversation = useRef<HTMLDivElement>(null);
   const variables = useMemo(() => variablesIn(dbg.source), [dbg.source]);
+  const lexi = useCompanion();
+
+  /** Lexi flies to the line; the debugger runs the same code so its board shows the same moment. */
+  const showLine = (line: number, text: string) => {
+    const short = text.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
+    if (!dbg.run || dbg.stale) void dbg.execute();
+    lexi.pointAt(line, short);
+  };
 
   useEffect(() => {
     client
@@ -85,8 +97,19 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
     conversation.current?.scrollTo({ top: conversation.current.scrollHeight, behavior: 'smooth' });
   }, [turns]);
 
-  const say = (text: string, viaVoice: boolean, extra: Partial<Turn> = {}) => {
-    setTurns((prev) => [...prev, { id: ++turnCounter, who: 'alexa', text, ...extra }]);
+  // Lexi's face follows the device: listening, thinking, speaking, or worried when something failed.
+  const { setTalking, setMood } = lexi;
+  useEffect(() => {
+    setTalking(light === 'speaking');
+    setMood(light === 'thinking' ? 'thinking' : light === 'listening' ? 'listening' : light === 'error' ? 'worried' : 'happy');
+  }, [light, setTalking, setMood]);
+  useEffect(() => () => setTalking(false), [setTalking]);
+
+  /** Add Alexa's answer. Answers that mention "line N" let Lexi point at that line; `point` flies there now. */
+  const say = (text: string, viaVoice: boolean, extra: Partial<Turn> = {}, point = false) => {
+    const line = extra.line ?? Number(text.match(/\bline (\d+)\b/)?.[1] ?? 0);
+    setTurns((prev) => [...prev, { id: ++turnCounter, who: 'alexa', text, ...extra, line: line || undefined }]);
+    if (point && line) showLine(line, text);
     if ((viaVoice || alwaysSpeak) && speechSupported) {
       setLight('speaking');
       speak(text, () => setLight('idle'));
@@ -141,10 +164,17 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           execution_id: run.execution_id,
           ...(intent.step !== undefined ? { step: intent.step } : {}),
         });
-        return say(res.speech, viaVoice, {
-          tool: 'get_execution_state',
-          card: res.event ? { kind: 'state', line: res.event.line, where: res.event.function } : undefined,
-        });
+        // "Where did it stop?" is about a place in the code, so Lexi goes and shows it.
+        return say(res.speech, viaVoice, { tool: 'get_execution_state', line: res.event?.line }, true);
+      }
+      case 'show': {
+        const run = await ensureRun();
+        if (run.failed) {
+          const res = await client.callTool<{ speech: string }>('get_debugging_summary', { execution_id: run.execution_id });
+          return say(res.speech, viaVoice, { tool: 'get_debugging_summary' }, true);
+        }
+        const res = await client.callTool<{ speech: string; event: { line: number } }>('get_execution_state', { execution_id: run.execution_id });
+        return say(res.speech, viaVoice, { tool: 'get_execution_state', line: res.event?.line }, true);
       }
       case 'fix': {
         const run = await ensureRun();
@@ -260,7 +290,11 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
       <section className="flex min-h-[460px] min-w-0 flex-col gap-3 lg:min-h-0" aria-label="Alexa+ simulator">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.9)]" aria-hidden />
+            {turns.length > 0 ? (
+              <span data-lexi-home className="block h-12 w-12 shrink-0" aria-hidden />
+            ) : (
+              <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.9)]" aria-hidden />
+            )}
             Alexa+ simulator
           </h2>
           <span className="text-sm text-slate-400">Ask about your code. Alexa answers through the CodeLens MCP server.</span>
@@ -284,14 +318,16 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
           <div ref={conversation} className="min-h-0 flex-1 space-y-3 overflow-auto p-4 sm:p-5" aria-live="polite">
             {turns.length === 0 && (
               <div className="cl-view-in flex min-h-full flex-col items-center justify-center gap-3 py-4 text-center">
+                {/* Lexi is drawn over this button by the companion layer; tapping Lexi starts listening. */}
                 <button
-                  className={`alexa-orb ${light} shrink-0 transition hover:scale-105 disabled:opacity-50`}
+                  data-lexi-home
+                  className="h-[120px] w-[120px] shrink-0 rounded-full disabled:opacity-50"
                   onClick={listen}
                   disabled={!ready}
-                  aria-label="Tap to speak to Alexa"
+                  aria-label="Tap Lexi to speak to Alexa"
                   title="Tap to speak"
                 />
-                <p className="text-xl font-semibold text-white">Tap the orb and say “Alexa, run my code.”</p>
+                <p className="text-xl font-semibold text-white">Hi, I'm Lexi! Tap me and say “Alexa, run my code.”</p>
                 <p className="max-w-md text-sm leading-relaxed text-slate-400">
                   Or type below. Alexa answers from the recorded run of your code: what happened, why it crashed, what a variable held, and a fix that is
                   tested before you trust it.
@@ -305,7 +341,9 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
                 </p>
               ) : (
                 <div key={t.id} className="cl-float-up flex max-w-[92%] gap-3">
-                  <span className="mt-1 h-7 w-7 shrink-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,#a5f3fc,#22d3ee_40%,#0e7490)]" aria-hidden />
+                  <span className="mt-0.5 shrink-0" aria-hidden>
+                    <Lexi size={32} />
+                  </span>
                   <div className="min-w-0 rounded-2xl rounded-tl-md bg-slate-800/70 px-4 py-3 ring-1 ring-white/10">
                     <p className="text-[17px] leading-snug text-slate-50">{t.text}</p>
                     {t.card?.kind === 'diff' && (
@@ -331,11 +369,6 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
                         ))}
                       </div>
                     )}
-                    {t.card?.kind === 'state' && (
-                      <button className="btn mt-2" onClick={onShowDebugger}>
-                        👀 Show line {t.card.line} in the debugger
-                      </button>
-                    )}
                     {t.card?.kind === 'tools' && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {t.card.names.map((n) => (
@@ -344,6 +377,11 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
                           </span>
                         ))}
                       </div>
+                    )}
+                    {t.line && (
+                      <button className="btn mt-2 border-cyan-400/40 text-cyan-100" onClick={() => showLine(t.line!, t.text)}>
+                        👉 Show me line {t.line}
+                      </button>
                     )}
                     {t.tool && <p className="mt-1.5 font-mono text-[11px] text-slate-500">via MCP tool {t.tool}</p>}
                   </div>

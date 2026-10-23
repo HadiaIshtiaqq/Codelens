@@ -7,6 +7,7 @@ export type Intent =
   | { kind: 'summary' }
   | { kind: 'variable'; name: string }
   | { kind: 'state'; step?: number }
+  | { kind: 'show' }
   | { kind: 'fix' }
   | { kind: 'validate' }
   | { kind: 'apply' }
@@ -44,6 +45,7 @@ export function parseIntent(utterance: string, variables: string[] = []): Intent
   if (/\b(help|what can you do|what can i (say|ask))\b/.test(text)) return { kind: 'help' };
   if (/\b(validate|verify|test (the|that|this|my) fix|check (the|that) fix|does (the|that) fix work)\b/.test(text)) return { kind: 'validate' };
   if (/\b(apply|use|accept|keep) (the|that|this) (fix|patch|change)\b/.test(text)) return { kind: 'apply' };
+  if (/\b(show me|point (to|at)|where('s| is) the (error|bug|problem|crash|mistake))\b/.test(text)) return { kind: 'show' };
   if (/\b(fix|repair|solve|correct|patch)\b/.test(text)) return { kind: 'fix' };
 
   const step = text.match(/\bstep (\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/);

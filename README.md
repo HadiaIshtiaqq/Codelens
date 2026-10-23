@@ -7,6 +7,7 @@ A Python debugging and reverse-engineering workspace:
   - Each question becomes a real MCP tool call over Streamable HTTP to the CodeLens MCP server (protocol 2025-11-25 or later).
   - The answer comes back as speech plus a visual card.
   - A live panel shows every MCP request and response.
+  - **Lexi**, Alexa's character, speaks the answers (her mouth moves with the voice) and flies to the code page to point at the line an answer is about. Ask "show me the error" or "where did it stop?", or press 👉 Show me.
 - **🐢 Turtle drawing:** `import turtle` works in the sandbox, and the picture is drawn step by step with the code, in Robo Lab and on Game mode's Drawing board. It was designed after studying Scratch's pen and motion engine with REA ([`docs/REA_SCRATCH_STUDY.md`](docs/REA_SCRATCH_STUDY.md)).
 - **🤖 Robo Lab (the default view)**, built for an 8-year-old with no coding experience:
   - Every step is one plain sentence about what just happened: "📦 Make a new box called apples: 3", "🔁 Loop: take the next one from the pets box. pet is “dog”", "❓ Question: is the temperature box bigger than 25? Yes!".

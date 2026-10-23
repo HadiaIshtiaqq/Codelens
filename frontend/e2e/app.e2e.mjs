@@ -377,6 +377,14 @@ await check('Alexa+ simulator answers through the MCP server', async () => {
     await page.getByText(expected).first().waitFor({ timeout: 30000 });
   };
   await ask('Alexa, run my code', /crashed with an IndexError on line 4/);
+  // Lexi flies to the code, points at the failing line, and flies back.
+  await page.getByLabel('Say something to Alexa').fill('show me the error');
+  await page.getByRole('button', { name: 'Ask', exact: true }).click();
+  await page.getByTestId('lexi-bubble').getByText(/line 4/i).first().waitFor({ timeout: 30000 });
+  await page.locator('.cl-lexi-line').first().waitFor();
+  await page.screenshot({ path: `${OUT}/5-lexi.png` });
+  await page.getByRole('button', { name: '← Back to Alexa' }).click();
+  await page.getByLabel('Say something to Alexa').waitFor();
   await ask('fix it', /I have a fix/);
   await ask('test the fix', /apply the fix/);
   await ask('apply the fix', /put the fixed code in your editor/);
