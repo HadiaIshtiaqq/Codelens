@@ -11,7 +11,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://YOUR_PUBLIC_HOST/mcp",
+      "url": "https://codelens-ctxh.onrender.com/mcp",
       "headers": [
         {
           "name": "Authorization",

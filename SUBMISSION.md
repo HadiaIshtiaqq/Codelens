@@ -131,8 +131,11 @@ against what happened, a severity, the workaround and a suggestion.
 4. **2:10–2:40, Game mode.** Side-by-side code and cards board on a bigger program.
 5. **2:40–3:00.** How to connect real Alexa+ to `https://<host>/mcp`, then the repo and license.
 
-## Links [YOU]
+## Links
 
-- Repository: https://github.com/HadiaIshtiaqq/Codelens (public, MIT)
-- Demo video: …
-- Hosted demo (optional): …
+- **Try it out (judges):** `https://codelens-ctxh.onrender.com/#access=<YOUR CODE>`. The code is built into the link, so
+  judges are let in automatically. Put it in Devpost's "Try it out" or judges' notes, not in the public repo.
+  Free hosting sleeps when idle: the first load can take up to a minute.
+- **Alexa+ / MCP endpoint:** `https://codelens-ctxh.onrender.com/mcp`, Streamable HTTP, header `Authorization: Bearer <YOUR CODE>`.
+- **Repository:** https://github.com/HadiaIshtiaqq/Codelens (public, MIT)
+- **Demo video:** **[YOU]** your YouTube or Vimeo link (public, English, under 3 minutes)

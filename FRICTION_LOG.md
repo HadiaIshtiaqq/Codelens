@@ -59,6 +59,44 @@ Things to record when the real key is used:
 
 Done so far: the MCP server is served at `https://<host>/mcp` (Streamable HTTP, protocol 2025-11-25 or later), and the in-app Alexa+ simulator drives it over the same protocol. Record here the task, steps, expected against actual, severity, workaround and suggestion for: registering the endpoint with Alexa+, authentication, how utterances reach the tools, and latency.
 
+## Hosting and AI providers (2026-10-23)
+
+### H1: Hugging Face Docker Spaces now need PRO
+
+- **Task:** host CodeLens free and permanently for judges.
+- **Steps:** created a Docker Space through the Hub API (`POST /api/repos/create`, `sdk: docker`) with a write token.
+- **Expected:** a free CPU Space, as the documentation suggests.
+- **Actual:** HTTP 402-style refusal: "hosting Gradio and Docker Spaces on free cpu-basic requires a PRO subscription".
+- **Severity:** high (blocked the planned host).
+- **Workaround:** deployed the same image on Render's free plan with a `render.yaml` blueprint.
+- **Suggestion:** state the PRO requirement on the Spaces docs and SDK pages before account creation.
+
+### H2: Cloudflare quick tunnels timed out from this network
+
+- **Task:** share the app from the laptop with a free HTTPS link.
+- **Steps:** `cloudflared tunnel --url http://127.0.0.1:8000` (2026.x).
+- **Expected:** a `*.trycloudflare.com` address within seconds.
+- **Actual:** `failed to request quick Tunnel … context deadline exceeded`, every time. The same POST with `curl` succeeded in about 5 s.
+- **Severity:** medium.
+- **Workaround:** fall back to localhost.run over the SSH built into Windows (`scripts/go-public.ps1`).
+- **Suggestion:** make cloudflared's quick-tunnel request timeout configurable.
+
+### G1: Gemini free tier, 20 requests a day on the default Flash model
+
+- **Task:** answer Alexa's questions with Gemini through its OpenAI-compatible endpoint.
+- **Steps:** auto-picked the newest stable Flash model from `/models`, then switched to `gemini-3-flash-preview`.
+- **Actual:**
+  - the newest stable Flash took 80–90 s or returned 503 "high demand";
+  - the preview model was fast (2–5 s), but its free quota is "limit: 20" requests a day, and tests used it up;
+  - lite models answered in 10–25 s.
+- **Severity:** high for live demos.
+- **Workaround:**
+  - retries with back-off on 429/503;
+  - a 30 s timeout, after which the rule-based answer is used;
+  - fewer AI calls per autopilot run;
+  - tests run with the AI switched off.
+- **Suggestion:** show per-model free quotas next to `/models`, and return the quota in a response header.
+
 ## AWS — not used
 
 No AWS services are used yet.

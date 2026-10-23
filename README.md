@@ -1,5 +1,21 @@
 # CodeLens AI + REA
 
+**Watch your Python run, ask Alexa why it crashed, and get a fix that is tested before you trust it.**
+Built for the *Build, Ship, Shape: Amazon Developer Hackathon* (Alexa+ track).
+
+| | |
+|---|---|
+| 🌐 **Live demo** | **https://codelens-ctxh.onrender.com**. Judges: use the link with the access code from the Devpost submission. Free hosting sleeps when idle, so the first load can take up to a minute. |
+| 🔌 **Alexa+ / MCP endpoint** | `https://codelens-ctxh.onrender.com/mcp` (Streamable HTTP, MCP 2025-11-25+, header `Authorization: Bearer <access code>`) |
+| 🎬 **Demo video** | See the Devpost submission |
+| 📄 **License** | [MIT](LICENSE) |
+
+**Try it in 30 seconds:** open the live demo → **🔵 Alexa+** → type **"debug my code"**.
+
+- Alexa runs the program, diagnoses the crash, writes a fix and tests it.
+- **Lexi** flies to the buggy line and points at it.
+- **🤖 Robo Lab**, **🎮 Game** and **📋 Classic** are three ways to watch the same run, step by step.
+
 A Python debugging and reverse-engineering workspace:
 
 - **Trace** Python in a sandbox with `sys.settrace`: every call, line, return, exception and print, with variable snapshots.
@@ -119,7 +135,7 @@ CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d --build
 
 ### Connecting Alexa+
 
-Register the MCP server as **Streamable HTTP** at `https://<your-host>/mcp`, with the header `Authorization: Bearer <access code>`. The server negotiates MCP protocol 2025-11-25 or later and offers 19 tools; the six "voice" tools return a short `speech` answer. [`server.json`](server.json) describes the same endpoint for MCP registries; replace `YOUR_PUBLIC_HOST` with your host.
+Register the MCP server as **Streamable HTTP** at `https://<your-host>/mcp` (the live demo: `https://codelens-ctxh.onrender.com/mcp`), with the header `Authorization: Bearer <access code>`. The server negotiates MCP protocol 2025-11-25 or later and offers 19 tools; the six "voice" tools return a short `speech` answer. [`server.json`](server.json) describes the live endpoint for MCP registries.
 
 ## Configuration
 
@@ -185,7 +201,7 @@ The CodeLens MCP server exposes 19 tools over the REST API:
   cd backend; .\.venv\Scripts\python -m app.mcp_server --http --host 0.0.0.0 --port 8765
   ```
   Clients must send `Authorization: Bearer <token>`. The server refuses to listen publicly without a token, and DNS-rebinding protection stays on. Put it behind HTTPS (a tunnel or reverse proxy).
-- **Registry manifest:** [`server.json`](server.json). Replace `YOUR_GITHUB_USERNAME` and `YOUR_PUBLIC_HOST` before publishing.
+- **Registry manifest:** [`server.json`](server.json), pointing at the live endpoint `https://codelens-ctxh.onrender.com/mcp`.
 
 ## Reverse engineering
 
@@ -229,6 +245,8 @@ CI (`.github/workflows/ci.yml`) runs all three on every push, including the Dock
 | Simulated Alexa+ experience (source included) | `frontend/src/components/AlexaView.tsx` (🔵 Alexa+ tab) |
 | Open-source license | [`LICENSE`](LICENSE) (MIT) |
 | Product feedback, friction log (bonus) | [`SUBMISSION.md`](SUBMISSION.md), [`FRICTION_LOG.md`](FRICTION_LOG.md) |
+| Working demo | Live at https://codelens-ctxh.onrender.com (free Render plan, [`render.yaml`](render.yaml)); the MCP server answers at `/mcp` |
+| Agentic behaviour | Alexa's autopilot ([`backend/app/services/agent.py`](backend/app/services/agent.py), MCP tool `debug_autopilot`) plans and chains run → diagnose → fix → test |
 
 **Nebius × NVIDIA:**
 
@@ -240,7 +258,7 @@ CI (`.github/workflows/ci.yml`) runs all three on every push, including the Dock
 | Open-source license | [`LICENSE`](LICENSE) (MIT; all dependencies are MIT/BSD) |
 | Friction logs (bonus) | [`FRICTION_LOG.md`](FRICTION_LOG.md), with Nebius and AWS sections to fill in from real use |
 
-Still on you: hosting the demo (see above), the 3-minute videos, and sharing the repository with the reviewers.
+Still on you: the demo video (under 3 minutes), and submitting on Devpost with the judges' link.
 
 ## Known limits
 
