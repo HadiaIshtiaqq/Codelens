@@ -51,3 +51,31 @@ def test_foreign_browser_origins_are_refused(client):
         "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "x", "version": "1"}},
     })
     assert resp.status_code == 403
+
+
+def _call(client, headers, name, arguments, call_id):
+    resp = client.post("/mcp", headers=headers, json={
+        "jsonrpc": "2.0", "id": call_id, "method": "tools/call", "params": {"name": name, "arguments": arguments},
+    })
+    content = _message(resp)["result"]
+    assert not content.get("isError"), content
+    return content.get("structuredContent") or json.loads(content["content"][0]["text"])
+
+
+def test_a_loop_that_never_ends_is_explained_and_fixed(client):
+    _, headers = _session(client)
+    run = _call(client, headers, "explain_code", {"source_code": "count = 10\nwhile count > 0:\n    count += 1\n"}, 10)
+    speech = run["speech"]
+    assert "never finished" in speech and "line 2, while count > 0" in speech
+    assert "count kept getting bigger: 10, 11, 12" in speech and "never became false" in speech
+    state = _call(client, headers, "get_execution_state", {"execution_id": run["execution_id"]}, 11)
+    assert state["speech"].startswith("It never stopped by itself") and "<module>" not in state["speech"]
+    fix = _call(client, headers, "propose_fix", {"execution_id": run["execution_id"]}, 12)
+    assert fix["found"] and "count -= 1" in fix["patched_source"]
+
+
+def test_no_automatic_fix_is_an_answer_not_an_error(client):
+    _, headers = _session(client)
+    run = _call(client, headers, "explain_code", {"source_code": "x = 5\nprint(x)\n"}, 20)
+    fix = _call(client, headers, "propose_fix", {"execution_id": run["execution_id"]}, 21)
+    assert fix["found"] is False and "couldn't find" in fix["speech"]

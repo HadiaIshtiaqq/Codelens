@@ -14,6 +14,7 @@ Register with Claude Code:
 
 import argparse
 import os
+import re
 import secrets
 from typing import Any, Optional
 
@@ -169,6 +170,55 @@ async def _all_events(execution_id: str) -> list[dict[str, Any]]:
     return events
 
 
+def _place(function: str) -> str:
+    return "the main program" if function == "<module>" else f"{function}()"
+
+
+def _number(text: str) -> Optional[float]:
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _endless_loop_speech(execution_id: str) -> str:
+    """Which loop never ended and why, read from the end of the trace (falls back to a general sentence)."""
+    general = "The program never finished: it ran out of time, which usually means a loop never ends."
+    try:
+        events = await _all_events(execution_id)
+        source = (await _call("GET", f"/api/v1/executions/{execution_id}/source"))["source_code"].splitlines()
+    except CodeLensAPIError:
+        return general
+    tail = [e for e in events[-300:] if e["event"] == "line" and e.get("file", "main.py") == "main.py"]
+    counts: dict[int, int] = {}
+    for e in tail:
+        counts[e["line"]] = counts.get(e["line"], 0) + 1
+    loops = [ln for ln in counts if 0 < ln <= len(source) and re.match(r"\s*(while|for)\b", source[ln - 1])]
+    if not loops:
+        return general
+    line = max(loops, key=lambda ln: counts[ln])
+    header = source[line - 1].strip().rstrip(":")
+    speech = f"The program never finished. The loop on line {line}, {header}, kept repeating until time ran out."
+    condition = header[len("while"):].strip() if header.startswith("while") else ""
+    names = [n for n in re.findall(r"[A-Za-z_]\w*", condition)] or list(tail[-1].get("locals", {}))
+    for name in names:
+        values: list[str] = []
+        for e in events:  # the whole run, so the story starts where the variable started
+            v = e.get("locals", {}).get(name)
+            if v is not None and (not values or values[-1] != v):
+                values.append(v)
+        if len(values) < 3:
+            continue
+        first, last = _number(values[0]), _number(values[-1])
+        trend = ""
+        if first is not None and last is not None and first != last:
+            trend = " kept getting bigger" if last > first else " kept getting smaller"
+        speech += f" {name}{trend}: {', '.join(values[:3])}, and on up to {values[-1]}"
+        speech += f", so {condition} never became false." if condition else "."
+        break
+    return speech
+
+
 def _outcome_speech(run: dict[str, Any]) -> str:
     if run["status"] == "timed_out":
         return "The program ran out of time, which usually means a loop never ends."
@@ -187,17 +237,23 @@ async def explain_code(source_code: str, question: Optional[str] = None) -> dict
     run = await run_python(source_code)
     exp = await _call("POST", "/api/v1/explanations",
                       json={"execution_id": run["execution_id"], "question": question})
-    speech = _outcome_speech(run)
-    if exp.get("likely_cause"):
-        speech += f" {exp['likely_cause']}"
+    if run["status"] == "timed_out":
+        speech = await _endless_loop_speech(run["execution_id"]) + " Say fix it, and I'll suggest a change."
+    else:
+        speech = _outcome_speech(run)
+        if exp.get("likely_cause"):
+            speech += f" {exp['likely_cause']}"
     return {"speech": speech, "execution_id": run["execution_id"], "run": run, "explanation": exp}
 
 
 @mcp.tool(description="Voice-friendly: where the program is at a step (default: the failing or last step): line, "
                       "function, call stack and variables, with a `speech` summary.")
 async def get_execution_state(execution_id: str, step: Optional[int] = None) -> dict[str, Any]:
+    timed_out = False
+    asked_for_step = step is not None
     if step is None:
         summary = await _call("GET", f"/api/v1/executions/{execution_id}")
+        timed_out = summary["status"] == "timed_out"
         events = await _all_events(execution_id)
         step = len(events) - 1
         if summary.get("error"):
@@ -205,10 +261,17 @@ async def get_execution_state(execution_id: str, step: Optional[int] = None) -> 
             step = fail[0] if fail else step
     state = await _call("GET", f"/api/v1/executions/{execution_id}/steps/{step}")
     ev = state["event"]
-    stack = " inside ".join(f["function"] for f in reversed(state["call_stack"])) or "the main program"
+    stack = " inside ".join(_place(f["function"]) for f in reversed(state["call_stack"])) or "the main program"
     variables = ", ".join(f"{k} is {v}" for k, v in list(ev["locals"].items())[:6] if not v.startswith("<"))
-    speech = f"At step {step + 1}, the program is on line {ev['line']} in {stack}."
-    if ev.get("narration"):
+    if timed_out:
+        speech = f"It never stopped by itself: time ran out while it was on line {ev['line']} in {stack}."
+    elif asked_for_step:
+        speech = f"At step {step + 1}, the program is on line {ev['line']} in {stack}."
+    elif ev["event"] == "exception":
+        speech = f"It stopped on line {ev['line']} in {stack}."
+    else:
+        speech = f"It finished on line {ev['line']} in {stack}."
+    if ev.get("narration") and ev["event"] != "exception":  # the exception sentence below says it already
         speech += f" {ev['narration'].rstrip('.')}."
     if variables:
         speech += f" {variables}."
@@ -245,9 +308,12 @@ async def get_variable_state(execution_id: str, name: str, step: Optional[int] =
 async def get_debugging_summary(execution_id: str) -> dict[str, Any]:
     run = await _call("GET", f"/api/v1/executions/{execution_id}")
     exp = await _call("POST", "/api/v1/explanations", json={"execution_id": execution_id})
-    speech = _outcome_speech(run)
-    if exp.get("likely_cause"):
-        speech += f" Likely cause: {exp['likely_cause']}"
+    if run["status"] == "timed_out":
+        speech = await _endless_loop_speech(execution_id)
+    else:
+        speech = _outcome_speech(run)
+        if exp.get("likely_cause"):
+            speech += f" Likely cause: {exp['likely_cause']}"
     if exp.get("suggested_next_step"):
         speech += f" Next, {exp['suggested_next_step'][0].lower()}{exp['suggested_next_step'][1:]}"
     return {"speech": speech, "run": run, "observed_facts": exp["observed_facts"], "explanation": exp}
@@ -256,12 +322,18 @@ async def get_debugging_summary(execution_id: str) -> dict[str, Any]:
 @mcp.tool(description="Voice-friendly: propose a fix for a failed execution. Returns `speech`, the patch id and the "
                       "unified diff. The fix is not trusted until validate_fix passes.")
 async def propose_fix(execution_id: str) -> dict[str, Any]:
-    patch = await _call("POST", "/api/v1/patches", json={"execution_id": execution_id})
+    try:
+        patch = await _call("POST", "/api/v1/patches", json={"execution_id": execution_id})
+    except CodeLensAPIError as exc:
+        if "HTTP 422" not in str(exc):
+            raise
+        return {"speech": "I couldn't find a safe automatic fix for this one. Ask me why it crashed, and I'll explain "
+                          "what went wrong so you can change it yourself.", "found": False}
     added = sum(1 for ln in patch["diff"].splitlines() if ln.startswith("+") and not ln.startswith("+++"))
     removed = sum(1 for ln in patch["diff"].splitlines() if ln.startswith("-") and not ln.startswith("---"))
     speech = (f"I have a fix that adds {added} line{'s' if added != 1 else ''} and removes {removed}. "
               f"{patch['rationale']} Say validate to test it.")
-    return {"speech": speech, **patch}
+    return {"speech": speech, "found": True, **patch}
 
 
 @mcp.tool(description="Voice-friendly: test a proposed fix in a fresh sandbox. `tests` holds test_* functions using "

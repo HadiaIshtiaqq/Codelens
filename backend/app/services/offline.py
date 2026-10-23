@@ -144,6 +144,11 @@ def _specialise(error: dict[str, Any], focus: Optional[dict[str, Any]], cause: s
 def propose_fix(source: str, evidence: dict[str, Any]) -> Optional[tuple[str, str]]:
     """Return (patched_source, rationale) for recognised failure patterns, else None."""
     error = evidence["outcome"]["error"]
+    if evidence["outcome"]["status"] == "timed_out":
+        try:
+            return _fix_endless_loop(source, ast.parse(source))
+        except SyntaxError:
+            return None
     if not error or evidence["outcome"]["status"] != "completed":
         return None
     if error.get("file", "main.py") != "main.py":
@@ -167,6 +172,30 @@ def propose_fix(source: str, evidence: dict[str, Any]) -> Optional[tuple[str, st
     if not fixer:
         return None
     return fixer(source, tree, line, error, focus)
+
+
+def _fix_endless_loop(source: str, tree: ast.AST) -> Optional[tuple[str, str]]:
+    """`while n > 0: n += 1` never ends: the counter moves away from the stopping point. Flip the step."""
+    away = {ast.Gt: ast.Add, ast.GtE: ast.Add, ast.Lt: ast.Sub, ast.LtE: ast.Sub}
+    for loop in ast.walk(tree):
+        test = getattr(loop, "test", None)
+        if not (isinstance(loop, ast.While) and isinstance(test, ast.Compare) and len(test.ops) == 1
+                and isinstance(test.left, ast.Name) and type(test.ops[0]) in away):
+            continue
+        name, wrong = test.left.id, away[type(test.ops[0])]
+        for node in ast.walk(loop):
+            if (isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id == name
+                    and isinstance(node.op, wrong)):
+                right = "-=" if wrong is ast.Add else "+="
+                old = ast.get_source_segment(source, node) or ""
+                new = f"{name} {right} {ast.get_source_segment(source, node.value)}"
+                cond = ast.get_source_segment(source, test)
+                direction = "bigger" if wrong is ast.Add else "smaller"
+                rationale = (f"The loop `while {cond}` on line {loop.lineno} never ends: `{old}` on line {node.lineno} "
+                             f"makes {name} {direction} every time, so `{cond}` stays true forever. "
+                             f"Changing it to `{new}` moves {name} toward the end of the loop.")
+                return _replace_node(source, node, new), rationale
+    return None
 
 
 def _line_offsets(source: str) -> list[int]:

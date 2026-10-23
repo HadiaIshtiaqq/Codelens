@@ -149,9 +149,10 @@ export function AlexaView({ dbg, onShowDebugger }: { dbg: Debugger; onShowDebugg
       case 'fix': {
         const run = await ensureRun();
         if (!run.failed) return say('Your program ran without any errors, so there is nothing to fix. Nice work!', viaVoice);
-        const res = await client.callTool<{ speech: string; patch_id: string; patched_source: string; diff: string }>('propose_fix', {
+        const res = await client.callTool<{ speech: string; found: boolean; patch_id: string; patched_source: string; diff: string }>('propose_fix', {
           execution_id: run.execution_id,
         });
+        if (!res.found) return say(res.speech, viaVoice, { tool: 'propose_fix' });
         setLastPatch({ patch_id: res.patch_id, patched_source: res.patched_source });
         return say(res.speech, viaVoice, { tool: 'propose_fix', card: { kind: 'diff', diff: res.diff } });
       }

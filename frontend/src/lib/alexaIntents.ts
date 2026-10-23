@@ -53,7 +53,11 @@ export function parseIntent(utterance: string, variables: string[] = []): Intent
   const name = mentionedVariable(text, variables);
   if (name && asking) return { kind: 'variable', name };
   const named = text.match(/\b(?:value of|variable)\s+([a-z_][a-z0-9_]*)\b/) ?? text.match(/\bwhat(?:'s| is| was)(?: the)?\s+([a-z_][a-z0-9_]*)\b/);
-  if (named && !['my', 'the', 'it', 'this', 'that', 'wrong', 'happening', 'going', 'happened', 'your', 'a', 'an'].includes(named[1])) {
+  // "What is the error / problem / output?" are questions about the run, not variables called error or output.
+  const notVariables = ['my', 'the', 'it', 'this', 'that', 'wrong', 'happening', 'going', 'happened', 'your', 'a', 'an'];
+  const aboutTheRun = ['error', 'errors', 'problem', 'bug', 'issue', 'matter', 'mistake', 'crash', 'exception', 'output', 'result', 'answer'];
+  if (named && aboutTheRun.includes(named[1]) && !variables.includes(named[1])) return { kind: 'summary' };
+  if (named && !notVariables.includes(named[1])) {
     return { kind: 'variable', name: named[1] };
   }
 

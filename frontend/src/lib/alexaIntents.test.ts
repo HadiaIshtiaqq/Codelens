@@ -26,5 +26,8 @@ describe('Alexa+ simulator intents', () => {
     expect(parseIntent("what's the total score", ['total', 'total_score'])).toEqual({ kind: 'variable', name: 'total_score' });
     expect(parseIntent('what is the value of count')).toEqual({ kind: 'variable', name: 'count' });
     expect(parseIntent('what is wrong')).toEqual({ kind: 'summary' });
+    expect(parseIntent('what is the error', ['count'])).toEqual({ kind: 'summary' });
+    expect(parseIntent("what's the problem")).toEqual({ kind: 'summary' });
+    expect(parseIntent('what is result', ['result'])).toEqual({ kind: 'variable', name: 'result' });
   });
 });
