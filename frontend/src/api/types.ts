@@ -181,7 +181,7 @@ export interface Health {
   sandbox: string;
   llm_provider: string;
   llm_model: string;
-  features?: { rea_ui: boolean; convert: boolean; access_code_required?: boolean };
+  features?: { rea_ui: boolean; access_code_required?: boolean };
 }
 
 export interface CodeExplanation {
@@ -190,17 +190,12 @@ export interface CodeExplanation {
   outline: { line: number; depth: number; text: string }[];
   /** Plain explanation for each line that has code (keys are line numbers). */
   line_notes: Record<string, string>;
+  /** Likely bugs spotted without running the code (text + number, endless loops). */
+  warnings?: { line: number; text: string }[];
 }
 
-export interface Conversion {
-  detected_language: string;
-  target_language: string;
-  converted_code: string;
-  notes: string[];
-  syntax_checked: boolean;
-  provider: string;
-  model: string | null;
-}
+/** Who the explanation is written for: Robo Lab, the Game view or the Classic view. */
+export type ExplainLevel = 'kid' | 'game' | 'classic';
 
 // ---- REA ----------------------------------------------------------------
 

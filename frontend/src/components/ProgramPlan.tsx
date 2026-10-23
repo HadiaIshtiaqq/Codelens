@@ -14,6 +14,17 @@ export function ProgramPlan({ plan, currentLine, onLine, big }: Props) {
   return (
     <div className={big ? 'space-y-2' : 'space-y-1.5'}>
       <p className={`${big ? 'text-lg' : 'text-sm'} ${plan.ok ? 'text-slate-200' : 'text-orange-200'}`}>{plan.intro}</p>
+      {plan.warnings?.map((w) => (
+        <button
+          key={`${w.line}-${w.text}`}
+          type="button"
+          onClick={() => onLine?.(w.line)}
+          className={`cl-pop block w-full rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-left text-amber-100 hover:bg-amber-500/20 ${big ? 'text-base' : 'text-sm'}`}
+          data-testid="plan-warning"
+        >
+          {w.text}
+        </button>
+      ))}
       {plan.outline.length > 0 && (
         <ol className={`space-y-1 ${big ? 'text-base' : 'text-sm'}`}>
           {plan.outline.map((item, i) => {

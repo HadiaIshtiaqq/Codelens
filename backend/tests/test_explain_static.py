@@ -1,5 +1,7 @@
 """Program plans and per-line notes, built without running the code."""
 
+from app.services.explain_static import explain_program
+
 PETS = (
     "def greet(name):\n"
     "    return 'Hi ' + name\n"
@@ -36,7 +38,7 @@ def test_kid_plan_and_line_notes(client):
 
 def test_standard_level(client):
     body = client.post("/api/v1/explain-code", json={"source_code": PETS, "level": "standard"}).json()
-    assert body["intro"].startswith("4 top-level statements, 1 function (greet)")
+    assert body["intro"].startswith("Module with 4 top-level statements and 1 function (greet())")
     assert body["line_notes"]["5"] == "Loop: pet takes each value from pets."
 
 
@@ -57,3 +59,30 @@ def test_input_and_tricks(client):
     notes = client.post("/api/v1/explain-code", json={"source_code": src}).json()["line_notes"]
     assert notes["3"] == "Ask you a question and put your answer in the age box."
     assert notes["4"] == "Do the double trick and put its answer in the result box."
+
+
+DESCRIBE = 'def describe(name, age):\n    return name + " is " + age + " years old"\n\n\nprint(describe("Ada", 36))\n'
+
+
+def test_each_view_explains_the_program_in_its_own_voice():
+    kid, game, classic = (explain_program(DESCRIBE, level) for level in ("kid", "game", "classic"))
+    assert kid["intro"].startswith("This program has 1 main step and teaches 1 trick")
+    assert game["intro"].startswith("🗺️ Quest map: 1 move and 1 skill")
+    assert classic["intro"].startswith("Module with 1 top-level statement and 1 function (describe())")
+    assert game["line_notes"][1].startswith("🎓 ") and classic["line_notes"][1].startswith("Defines function describe")
+    assert explain_program(DESCRIBE, "standard")["intro"] == classic["intro"]  # old name still accepted
+
+
+def test_text_plus_number_is_flagged_before_running():
+    for level, phrase in (("kid", "glues the words"), ("game", "Trap on line 2"), ("classic", "str + int concatenation")):
+        warnings = explain_program(DESCRIBE, level)["warnings"]
+        assert len(warnings) == 1 and warnings[0]["line"] == 2 and phrase in warnings[0]["text"]
+        assert "age" in warnings[0]["text"] and "36" in warnings[0]["text"]
+    assert explain_program('print("a" + str(3))\nx = 2\nprint("b" + "c")\n', "classic")["warnings"] == []
+    assert explain_program('n = 5\nprint("n is " + n)\n', "classic")["warnings"][0]["line"] == 2
+
+
+def test_endless_loop_is_flagged_before_running():
+    warnings = explain_program("count = 10\nwhile count > 0:\n    count += 1\n", "game")["warnings"]
+    assert warnings and "Endless loop on line 2" in warnings[0]["text"]
+    assert explain_program("count = 10\nwhile count > 0:\n    count -= 1\n", "game")["warnings"] == []

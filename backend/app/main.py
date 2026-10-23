@@ -11,7 +11,7 @@ from starlette.responses import Response
 
 from app import mcp_server
 from app.config import PROJECT_DIR, get_settings
-from app.routers import analysis, convert, executions, explain, rea
+from app.routers import analysis, executions, explain, rea
 from app.services.access import AccessCodeMiddleware, parse_codes
 from app.services.llm import select_provider
 from app.services.ratelimit import RateLimiter, RateLimitMiddleware
@@ -104,7 +104,6 @@ app.add_middleware(_McpExactPath)
 
 app.include_router(executions.router)
 app.include_router(analysis.router)
-app.include_router(convert.router)
 app.include_router(explain.router)
 app.include_router(rea.router)
 
@@ -145,7 +144,6 @@ async def health() -> dict[str, object]:
         "llm_model": provider.model or "",
         "features": {
             "rea_ui": settings.show_rea_ui,
-            "convert": provider.name != "offline",
             "access_code_required": bool(settings.access_code),
         },
     }

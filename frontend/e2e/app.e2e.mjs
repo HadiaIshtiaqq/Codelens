@@ -99,7 +99,7 @@ await page.evaluate(() => {
   localStorage.setItem('codelens.kids.pace', 'manual');
 });
 await page.reload();
-await check('kids view is the default', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Kids' }).waitFor({ timeout: 30000 }));
+await check('kids view is the default', () => page.locator('[role="radio"][aria-checked="true"]', { hasText: 'Robo Lab' }).waitFor({ timeout: 30000 }));
 await check('kids: plain-word steps, idea cards, boxes', async () => {
   await page.getByLabel('Pick a program').selectOption('pets');
   await page.getByRole('checkbox', { name: /Read aloud/ }).uncheck().catch(() => {});
@@ -261,7 +261,10 @@ await check('game: read aloud speaks each step', async () => {
 });
 await check('game: program plan panel', async () => {
   await page.getByRole('button', { name: /What does this program do/ }).click();
-  await page.getByText(/This program has \d+ main steps and teaches 1 trick \(average\)/).waitFor({ timeout: 10000 });
+  await page.getByText(/Quest map: \d+ moves and 1 skill to learn \(average\)/).waitFor({ timeout: 10000 });
+  await page.getByRole('radio', { name: /Classic/ }).click(); // each view explains in its own voice
+  await page.getByText(/Module with \d+ top-level statements and 1 function \(average\(\)\)/).waitFor({ timeout: 10000 });
+  await page.getByRole('radio', { name: /Game/ }).click();
   await page.getByRole('button', { name: /What does this program do/ }).click();
 });
 await check('explain every line', async () => {
@@ -364,11 +367,6 @@ await check('delete run', async () => {
 });
 
 // ---------------------------------------------------------------- other tabs and layouts
-await check('code converter tab loads', async () => {
-  await page.getByRole('tab', { name: /Code Converter/ }).click();
-  await page.getByText(/Paste code in any language|AI is offline/).first().waitFor();
-  await page.getByRole('tab', { name: /Python Debugger/ }).click();
-});
 await check('Alexa+ simulator answers through the MCP server', async () => {
   await load('def total(xs):\n    s = 0\n    for i in range(len(xs) + 1):\n        s += xs[i]\n    return s\n\nprint(total([1, 2, 3]))\n');
   await page.getByRole('tab', { name: /Alexa/ }).click();

@@ -98,21 +98,6 @@ Return JSON with exactly these keys:
 Keep everything that is not part of the fix byte-for-byte identical (names, comments, formatting)."""
 
 
-class ConversionOut(BaseModel):
-    detected_language: str = Field(min_length=1, max_length=60)
-    converted_code: str = Field(min_length=1)
-    notes: list[str] = Field(default_factory=list)
-
-
-CONVERT_SYSTEM_PROMPT = """You are an expert programmer who translates source code between programming languages.
-Rules:
-- Preserve the program's behaviour exactly: same logic, same output, same edge cases (including bugs, unless asked).
-- Write idiomatic code for the target language using only its standard library.
-- Keep the original names and comments where the target language allows it.
-- If something has no direct equivalent, choose the closest standard construct and mention it in notes.
-- Reply with a single JSON object and nothing else."""
-
-
 def choose_model(model_ids: list[str]) -> Optional[str]:
     """Pick the best NVIDIA Nemotron text model from a provider catalogue."""
     def score(mid: str) -> tuple:
@@ -192,34 +177,6 @@ class LLMClient:
             raise LLMError(f"{p.name} returned an unexpected response shape") from exc
         return _extract_json(content)
 
-    async def convert(self, source: str, source_language: str, target_language: str,
-                      feedback: Optional[str] = None) -> ConversionOut:
-        lang = source_language if source_language.lower() != "auto" else "auto-detect it"
-        extra = ""
-        if target_language.lower() == "python":
-            extra = (
-                "\n- The Python must run as a standalone script (python3 main.py) with no command-line arguments.\n"
-                "- Replace input()/stdin reads with fixed example values and say so in notes.\n"
-                "- If the original has a main entry point, call it at module level so running the file runs the program."
-            )
-        prompt = (
-            f"Translate this code to {target_language}.\nSource language: {lang}.{extra}\n\n"
-            f"SOURCE CODE:\n```\n{source}\n```\n\n"
-            "Return JSON with exactly these keys:\n"
-            '{"detected_language": "name of the source language", '
-            '"converted_code": "the complete translated program", '
-            '"notes": ["short notes on anything that changed or needs attention"]}'
-        )
-        if feedback:
-            prompt += f"\n\nYour previous answer was rejected: {feedback}\nFix it and answer again."
-        data = await self._chat_json(prompt, system=CONVERT_SYSTEM_PROMPT, max_tokens=8192)
-        try:
-            out = ConversionOut.model_validate(data)
-        except ValidationError as exc:
-            raise LLMError(f"conversion failed schema validation: {exc.errors()[:2]}") from exc
-        out.converted_code = _strip_fence(out.converted_code)
-        return out
-
     async def ping(self) -> dict[str, Any]:
         """Smallest possible round-trip, used to prove the provider is live."""
         return await self._chat_json('Reply with exactly this JSON object: {"ok": true}')
@@ -247,12 +204,6 @@ class LLMClient:
             return PatchOut.model_validate(data)
         except ValidationError as exc:
             raise LLMError(f"patch failed schema validation: {exc.errors()[:2]}") from exc
-
-
-def _strip_fence(code: str) -> str:
-    text = code.strip("\n")
-    m = re.match(r"^```[\w+#.-]*\n(.*?)\n?```\s*$", text, re.DOTALL)
-    return (m.group(1) if m else text) + "\n"
 
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)

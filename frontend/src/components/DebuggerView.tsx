@@ -45,18 +45,15 @@ function loadMode(): Mode {
 
 interface Props {
   dbg: Debugger;
-  /** Ask the Code Converter to translate this snippet to Python. */
-  onConvert: (code: string, language: string) => void;
 }
 
-export function DebuggerView({ dbg, onConvert }: Props) {
+export function DebuggerView({ dbg }: Props) {
   const { run, step, stale, activeFile } = dbg;
   const [mode, setMode] = useState<Mode>(loadMode);
   const [reveal, setReveal] = useState<{ line: number; nonce: number } | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [explainAll, setExplainAll] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
-  const [simpleWords, setSimpleWords] = useState(true);
   const [board, setBoard] = useState<BoardView>(loadBoard);
   const chooseBoard = (view: BoardView) => {
     setDrawingFirst(false);
@@ -68,7 +65,8 @@ export function DebuggerView({ dbg, onConvert }: Props) {
     }
   };
   // Plan + line notes for the file in the editor, built from the code itself (works before running).
-  const plan = useCodeExplanation(dbg.editorValue, simpleWords ? 'kid' : 'standard');
+  // Each view explains the program in its own voice (Robo Lab has its own plan in KidsView).
+  const plan = useCodeExplanation(dbg.editorValue, mode === 'classic' ? 'classic' : 'game');
   const game = useGame(dbg);
   const revealLine = (line: number) => setReveal({ line, nonce: Date.now() });
 
@@ -104,7 +102,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const failLine = error && (error.file ?? MAIN_FILE) === activeFile ? error.line || null : null;
   const activeLine = event && eventFile === activeFile ? event.line : null;
   const cited = !stale && activeFile === MAIN_FILE ? dbg.explanation?.cited_lines ?? [] : [];
-  // Pasted JavaScript/Java/C++…? Offer to convert it instead of just showing a SyntaxError.
+  // Pasted JavaScript/Java/C++…? Say so plainly instead of only showing a SyntaxError.
   const foreign = useMemo(() => {
     const err = run?.summary.error;
     return run && !stale && err && ['SyntaxError', 'IndentationError'].includes(err.type) ? detectNonPython(run.source) : null;
@@ -138,7 +136,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
           onClick={() => setMode(m)}
           className={`px-2.5 py-1 font-semibold ${mode === m ? 'bg-cyan-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-100'}`}
         >
-          {m === 'kids' ? '🧸 Kids' : m === 'game' ? '🎮 Game' : '📋 Classic'}
+          {m === 'kids' ? '🤖 Robo Lab' : m === 'game' ? '🎮 Game' : '📋 Classic'}
         </button>
       ))}
     </div>
@@ -165,10 +163,6 @@ export function DebuggerView({ dbg, onConvert }: Props) {
       >
         🗺 What does this program do?
       </button>
-      <label className="flex items-center gap-1 text-xs text-slate-400" title="Explanations in everyday words, or short and precise">
-        <input type="checkbox" checked={simpleWords} onChange={(e) => setSimpleWords(e.target.checked)} />
-        simple words
-      </label>
     </>
   );
 
@@ -224,11 +218,8 @@ export function DebuggerView({ dbg, onConvert }: Props) {
   const foreignBanner = foreign && run && (
     <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-fuchsia-800 bg-fuchsia-950/70 px-3 py-2 text-sm">
       <span>
-        🌍 This looks like <strong>{foreign}</strong>, not Python. The simulator runs Python, so convert it first.
+        🌍 This looks like <strong>{foreign}</strong>, not Python. CodeLens runs Python programs, so write it in Python to watch it run.
       </span>
-      <button className="btn btn-primary py-1" onClick={() => onConvert(run.source, foreign)}>
-        🔄 Convert to Python
-      </button>
     </div>
   );
 
@@ -237,7 +228,7 @@ export function DebuggerView({ dbg, onConvert }: Props) {
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/40 px-3 py-1">
           {modeSwitch}
-          <span className="text-xs text-slate-400">Kids mode: big text, simple words, read aloud. Switch to Game or Classic for more tools.</span>
+          <span className="text-xs text-slate-400">Robo Lab: big text, simple words and a robot guide, for first-time coders. Switch to Game or Classic for more tools.</span>
         </div>
         <div className="min-h-0 flex-1">
           <KidsView dbg={dbg} />

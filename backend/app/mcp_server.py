@@ -144,14 +144,6 @@ async def rea_call_tool(name: str, arguments: Optional[dict[str, Any]] = None) -
     return await _call("POST", "/api/v1/rea/tools/call", json={"name": name, "arguments": arguments or {}})
 
 
-@mcp.tool(description="Translate code between programming languages with the AI (any source language; "
-                      "target defaults to Python, which is syntax-checked so it can be run with run_python).")
-async def convert_code(source_code: str, target_language: str = "Python",
-                       source_language: str = "auto") -> dict[str, Any]:
-    return await _call("POST", "/api/v1/convert", json={"source_code": source_code, "target_language": target_language,
-                                                         "source_language": source_language})
-
-
 # ---------------------------------------------------------------------------
 # Conversational tools (Alexa+ / voice & chat assistants)
 #

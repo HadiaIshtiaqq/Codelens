@@ -2,7 +2,7 @@ import type {
   ExecutionResponse,
   Explanation,
   CodeExplanation,
-  Conversion,
+  ExplainLevel,
   Health,
   JsAnalysis,
   Patch,
@@ -184,26 +184,18 @@ export async function runStreaming(
 
 export const api = {
   health: () => request<Health>('GET', '/health'),
-  explainCode: (sourceCode: string, level: 'kid' | 'standard') =>
+  explainCode: (sourceCode: string, level: ExplainLevel) =>
     request<CodeExplanation>('POST', '/api/v1/explain-code', { source_code: sourceCode, level }),
   testTemplate: (executionId: string) =>
     request<{ tests: string }>('GET', `/api/v1/executions/${executionId}/test-template`).then((r) => r.tests),
   deleteExecution: (executionId: string) => request<{ deleted: boolean }>('DELETE', `/api/v1/executions/${executionId}`),
-  checkAccess: () => request<{ languages: string[] }>('GET', '/api/v1/convert/languages'),
+  checkAccess: () => request<{ ok: boolean }>('GET', '/api/v1/access'),
   explain: (executionId: string, step: number | null, question: string | null) =>
     request<Explanation>('POST', '/api/v1/explanations', { execution_id: executionId, step, question }),
   createPatch: (executionId: string, explanationId: string | null, diff?: string) =>
     request<Patch>('POST', '/api/v1/patches', { execution_id: executionId, explanation_id: explanationId, diff }),
   validatePatch: (patchId: string, tests: string | null) =>
     request<Validation>('POST', '/api/v1/patches/validate', { patch_id: patchId, tests }),
-
-  convert: (sourceCode: string, sourceLanguage: string, targetLanguage: string, signal?: AbortSignal) =>
-    request<Conversion>(
-      'POST',
-      '/api/v1/convert',
-      { source_code: sourceCode, source_language: sourceLanguage, target_language: targetLanguage },
-      signal,
-    ),
 
   reaStatus: (refresh = false) => request<ReaStatus>('GET', `/api/v1/rea/status${refresh ? '?refresh=true' : ''}`),
   reaWorkspace: () => request<ReaWorkspace>('GET', '/api/v1/rea/workspace'),

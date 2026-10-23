@@ -11,9 +11,10 @@ from typing import Any, Optional
 
 from app.services.kidspeak import NAME, as_question, words
 from app.services.narrate import _static, _statements_by_line
+from app.services.heads_up import heads_up
 from app.services.turtlespeak import turtle_sentence
 
-Level = str  # "kid" | "standard"
+Level = str  # "kid" | "game" | "classic" ("standard" = classic)
 
 
 def _print_words(call: ast.Call) -> str:
@@ -101,8 +102,25 @@ def kid_line(node: ast.stmt, functions: set[str], classes: frozenset[str] = froz
     return _static(node)
 
 
+_GAME_ICONS: list[tuple[type, str]] = [
+    (ast.FunctionDef, "🎓"), (ast.ClassDef, "🏗️"), (ast.Return, "🎁"), (ast.For, "🔁"), (ast.While, "🔁"),
+    (ast.If, "❓"), (ast.Import, "🧰"), (ast.ImportFrom, "🧰"), (ast.AugAssign, "📈"), (ast.Assign, "📦"),
+    (ast.Try, "🛡️"), (ast.Raise, "💥"), (ast.Break, "🚪"), (ast.Continue, "⏭️"),
+]
+
+
+def _game_line(node: ast.stmt) -> str:
+    """Game view: the precise sentence, with an icon for the kind of move."""
+    icon = next((i for kind, i in _GAME_ICONS if isinstance(node, kind)), "▶️")
+    if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and getattr(node.value.func, "id", None) == "print":
+        icon = "🖨️"
+    return f"{icon} {_static(node)}."
+
+
 def _line_text(node: ast.stmt, level: Level, functions: set[str], classes: frozenset[str]) -> str:
-    return kid_line(node, functions, classes) if level == "kid" else _static(node) + "."
+    if level == "kid":
+        return kid_line(node, functions, classes)
+    return _game_line(node) if level == "game" else _static(node) + "."
 
 
 def _else_lines(source: str, tree: ast.AST) -> dict[int, str]:
@@ -124,13 +142,17 @@ def _else_lines(source: str, tree: ast.AST) -> dict[int, str]:
 
 
 def explain_program(source: str, level: Level = "kid") -> dict[str, Any]:
-    """{"ok", "outline": [{line, depth, text}], "line_notes": {line: text}, "intro": str}."""
+    """{"ok", "intro", "outline": [{line, depth, text}], "line_notes": {line: text}, "warnings": [{line, text}]}.
+
+    `level` sets the voice: "kid" (Robo Lab), "game" (Game view) or "classic" (precise; "standard" is the old name).
+    """
+    level = "classic" if level == "standard" else level
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
         msg = (f"Line {exc.lineno} can't be read yet. Something is missing, like a ':' or a bracket."
                if level == "kid" else f"Line {exc.lineno} has a syntax error: {exc.msg}.")
-        return {"ok": False, "intro": msg, "outline": [], "line_notes": {}}
+        return {"ok": False, "intro": msg, "outline": [], "line_notes": {}, "warnings": []}
 
     functions = {n.name for n in tree.body if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)}
     classes = frozenset(n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
@@ -162,14 +184,21 @@ def explain_program(source: str, level: Level = "kid") -> dict[str, Any]:
 
     tricks = [n.name for n in tree.body if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)]
     main_steps = sum(1 for n in tree.body if not isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef))
+    plural = lambda n, word: f"{n} {word}{'s' if n != 1 else ''}"  # noqa: E731
     if level == "kid":
-        intro = f"This program has {main_steps} main step{'s' if main_steps != 1 else ''}"
+        intro = f"This program has {plural(main_steps, 'main step')}"
         if tricks:
-            intro += f" and teaches {len(tricks)} trick{'s' if len(tricks) != 1 else ''} ({', '.join(tricks)})"
+            intro += f" and teaches {plural(len(tricks), 'trick')} ({', '.join(tricks)})"
         intro += ". Here is the plan, from top to bottom:"
-    else:
-        intro = f"{main_steps} top-level statement{'s' if main_steps != 1 else ''}"
+    elif level == "game":
+        intro = f"🗺️ Quest map: {plural(main_steps, 'move')}"
         if tricks:
-            intro += f", {len(tricks)} function{'s' if len(tricks) != 1 else ''} ({', '.join(tricks)})"
-        intro += ". Outline:"
-    return {"ok": True, "intro": intro, "outline": outline[:80], "line_notes": dict(sorted(notes.items()))}
+            intro += f" and {plural(len(tricks), 'skill')} to learn ({', '.join(tricks)})"
+        intro += ". The robot plays them top to bottom; skills run only when a move calls them."
+    else:
+        intro = f"Module with {plural(main_steps, 'top-level statement')}"
+        if tricks:
+            intro += f" and {plural(len(tricks), 'function')} ({', '.join(t + '()' for t in tricks)})"
+        intro += ". Execution order:"
+    return {"ok": True, "intro": intro, "outline": outline[:80], "line_notes": dict(sorted(notes.items())),
+            "warnings": heads_up(tree, level)}

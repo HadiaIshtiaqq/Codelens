@@ -1,16 +1,14 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { ACCESS_DENIED_EVENT, api, getAccessCode, setAccessCode } from './api/client';
 import type { Health } from './api/types';
-import type { ConvertRequest } from './components/ConverterView';
 import { DebuggerView } from './components/DebuggerView';
 import { useDebugger } from './hooks/useDebugger';
 
 // Secondary tabs are split into their own chunks, so the debugger appears sooner.
-const ConverterView = lazy(() => import('./components/ConverterView').then((m) => ({ default: m.ConverterView })));
 const ReaView = lazy(() => import('./components/rea/ReaView').then((m) => ({ default: m.ReaView })));
 const AlexaView = lazy(() => import('./components/AlexaView').then((m) => ({ default: m.AlexaView })));
 
-type View = 'debugger' | 'alexa' | 'convert' | 'rea';
+type View = 'debugger' | 'alexa' | 'rea';
 
 const loading = <p className="p-6 text-sm text-slate-500">Loading…</p>;
 
@@ -69,7 +67,6 @@ export default function App() {
   const [view, setView] = useState<View>('debugger');
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState(false);
-  const [convertRequest, setConvertRequest] = useState<ConvertRequest | null>(null);
   const [locked, setLocked] = useState(false);
   // Mount secondary views on first visit, then keep them mounted to preserve their state.
   const [visited, setVisited] = useState<Set<View>>(() => new Set(['debugger']));
@@ -108,7 +105,6 @@ export default function App() {
   const tabs: [View, string][] = [
     ['debugger', '🎮 Python Debugger'],
     ['alexa', '🔵 Alexa+'],
-    ['convert', '🔄 Code Converter'],
     ...(showRea ? ([['rea', '🛡 Reverse Engineering']] as [View, string][]) : []),
   ];
 
@@ -161,33 +157,12 @@ export default function App() {
         </div>
       </header>
       <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'debugger'}>
-        <DebuggerView
-          dbg={dbg}
-          onConvert={(code, language) => {
-            setConvertRequest({ code, from: language, nonce: Date.now() });
-            setView('convert');
-          }}
-        />
+        <DebuggerView dbg={dbg} />
       </div>
       {visited.has('alexa') && (
         <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'alexa'}>
           <Suspense fallback={loading}>
             <AlexaView dbg={dbg} onShowDebugger={() => setView('debugger')} />
-          </Suspense>
-        </div>
-      )}
-      {visited.has('convert') && (
-        <div className="cl-view-in min-h-0 flex-1" hidden={view !== 'convert'}>
-          <Suspense fallback={loading}>
-            <ConverterView
-              aiReady={aiReady}
-              request={convertRequest}
-              onRunPython={(code) => {
-                dbg.loadProject(code);
-                setView('debugger');
-                void dbg.execute(code, { files: {}, stdin: '' });
-              }}
-            />
           </Suspense>
         </div>
       )}

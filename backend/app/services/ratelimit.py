@@ -14,7 +14,6 @@ LIMITED_PREFIXES = (
     "/api/v1/executions",  # POST only: runs code in a sandbox
     "/api/v1/explanations",
     "/api/v1/patches",
-    "/api/v1/convert",
     "/api/v1/ai/selftest",
     "/api/v1/rea/javascript",
     "/api/v1/rea/tools/call",

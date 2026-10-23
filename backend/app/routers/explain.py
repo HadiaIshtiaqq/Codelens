@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1", tags=["Explain"])
 
 class ExplainCodeRequest(BaseModel):
     source_code: str = Field(..., description="Python code to explain (it is parsed, never run)")
-    level: Literal["kid", "standard"] = "kid"
+    level: Literal["kid", "game", "classic", "standard"] = "kid"
 
     @field_validator("source_code")
     @classmethod
@@ -22,6 +22,12 @@ class ExplainCodeRequest(BaseModel):
         if len(value.encode("utf-8")) > limit:
             raise ValueError(f"source_code exceeds {limit // 1024} KB limit")
         return value
+
+
+@router.get("/access")
+async def access_check() -> dict:
+    """Cheap request the access-code gate uses to test a code (the middleware does the checking)."""
+    return {"ok": True}
 
 
 @router.post("/explain-code")

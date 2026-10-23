@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import type { CodeExplanation } from '../api/types';
+import type { CodeExplanation, ExplainLevel } from '../api/types';
 
 /** Plan + per-line notes for `source`, refreshed shortly after the code stops changing. */
-export function useCodeExplanation(source: string, level: 'kid' | 'standard'): CodeExplanation | null {
+export function useCodeExplanation(source: string, level: ExplainLevel): CodeExplanation | null {
   const [result, setResult] = useState<CodeExplanation | null>(null);
   useEffect(() => {
     let alive = true;

@@ -234,7 +234,7 @@ export function useDebugger() {
     clearRun();
   }, [run, clearRun]);
 
-  /** Replace the whole project (examples, converter, shared links). */
+  /** Replace the whole project (examples, shared links, Alexa fixes). */
   const loadProject = useCallback(
     (main: string, extra: Record<string, string> = {}, input = '') => {
       setSource(main);
