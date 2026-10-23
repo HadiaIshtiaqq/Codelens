@@ -1,12 +1,16 @@
 """Bugs you can see before running: warnings for the "What does this program do?" plan.
 
-Two common beginner mistakes are found from the syntax tree alone:
+Common beginner mistakes found from the syntax tree alone:
 - joining text and a number with `+` (TypeError at run time), including through a function
   parameter that a call site fills with a number;
-- a `while` loop whose counter moves away from the point where the loop would stop.
+- a `while` loop whose counter moves away from the point where the loop would stop;
+- a name that is used but never created, usually a typo (NameError), with a suggestion;
+- `for i in range(len(xs) + 1)` reading `xs[i]` one past the end (IndexError).
 """
 
 import ast
+import builtins
+import difflib
 from typing import Any, Literal, Optional
 
 Level = Literal["kid", "game", "classic"]
@@ -152,7 +156,83 @@ def _endless_loops(tree: ast.Module, level: Level) -> list[dict[str, Any]]:
     return warnings
 
 
+def _defined_names(tree: ast.Module) -> set[str]:
+    """Every name the program creates anywhere (scopes are ignored: this only looks for typos)."""
+    names = set(dir(builtins)) | {"__name__", "__file__", "__doc__"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store | ast.Del):
+            names.add(node.id)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            names.add(node.name)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.Import | ast.ImportFrom):
+            names.update((a.asname or a.name).split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.Global | ast.Nonlocal):
+            names.update(node.names)
+    return names
+
+
+def _unknown_names(tree: ast.Module, level: Level) -> list[dict[str, Any]]:
+    """`print(totl)` when the program only ever made `total`: a NameError waiting to happen."""
+    if any(isinstance(n, ast.ImportFrom) and any(a.name == "*" for a in n.names) for n in ast.walk(tree)):
+        return []  # `from x import *` can define anything
+    defined = _defined_names(tree)
+    warnings: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)) or node.id in defined or node.id in seen:
+            continue
+        seen.add(node.id)
+        close = difflib.get_close_matches(node.id, [n for n in defined if not n.startswith("__")], n=1, cutoff=0.75)
+        guess = close[0] if close else None
+        if level == "kid":
+            message = (f"⚠️ Watch out! Line {node.lineno} uses {node.id}, but there is no box with that name."
+                       + (f" Did you mean {guess}?" if guess else " Make the box first, or check the spelling."))
+        elif level == "game":
+            message = (f"⚠️ Unknown name on line {node.lineno}: `{node.id}` is never created, so the robot will "
+                       f"crash with a NameError." + (f" Did you mean `{guess}`?" if guess else ""))
+        else:
+            message = (f"Line {node.lineno}: `{node.id}` is not defined anywhere, so this raises NameError."
+                       + (f" Did you mean `{guess}`?" if guess else ""))
+        warnings.append({"line": node.lineno, "text": message})
+    return warnings
+
+
+def _one_past_the_end(tree: ast.Module, level: Level) -> list[dict[str, Any]]:
+    """`for i in range(len(xs) + 1): xs[i]` reads one item past the end on the last turn."""
+    warnings: list[dict[str, Any]] = []
+    for loop in ast.walk(tree):
+        if not (isinstance(loop, ast.For) and isinstance(loop.target, ast.Name) and isinstance(loop.iter, ast.Call)
+                and getattr(loop.iter.func, "id", None) == "range" and loop.iter.args):
+            continue
+        bound = loop.iter.args[-1] if len(loop.iter.args) <= 2 else None
+        if not (isinstance(bound, ast.BinOp) and isinstance(bound.op, ast.Add) and isinstance(bound.right, ast.Constant)
+                and bound.right.value == 1 and isinstance(bound.left, ast.Call) and getattr(bound.left.func, "id", None) == "len"
+                and bound.left.args and isinstance(bound.left.args[0], ast.Name)):
+            continue
+        seq, index = bound.left.args[0].id, loop.target.id
+        used = any(isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == seq
+                   and isinstance(n.slice, ast.Name) and n.slice.id == index for n in ast.walk(loop))
+        if not used:
+            continue
+        if level == "kid":
+            message = (f"⚠️ Watch out! The loop on line {loop.lineno} counts one too far: on its last turn, "
+                       f"{seq}[{index}] asks for a car that isn't on the {seq} train. Use range(len({seq})).")
+        elif level == "game":
+            message = (f"⚠️ Off-by-one on line {loop.lineno}: range(len({seq}) + 1) makes {index} reach len({seq}), "
+                       f"one past the last item, so {seq}[{index}] crashes with an IndexError. Use range(len({seq})).")
+        else:
+            message = (f"Line {loop.lineno}: range(len({seq}) + 1) lets {index} reach len({seq}); {seq}[{index}] "
+                       f"then raises IndexError. Use range(len({seq})).")
+        warnings.append({"line": loop.lineno, "text": message})
+    return warnings
+
+
 def heads_up(tree: ast.Module, level: Level) -> list[dict[str, Any]]:
     """Warnings about likely bugs, in the reader's words, ordered by line."""
-    found = _text_plus_number(tree, level) + _endless_loops(tree, level)
+    found = (_text_plus_number(tree, level) + _endless_loops(tree, level) + _unknown_names(tree, level)
+             + _one_past_the_end(tree, level))
     return sorted(found, key=lambda w: w["line"])

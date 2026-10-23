@@ -43,10 +43,10 @@ export function parseIntent(utterance: string, variables: string[] = []): Intent
   const text = normalise(utterance);
   if (!text) return { kind: 'unknown' };
   if (/\b(help|what can you do|what can i (say|ask))\b/.test(text)) return { kind: 'help' };
-  if (/\b(validate|verify|test (the|that|this|my) fix|check (the|that) fix|does (the|that) fix work)\b/.test(text)) return { kind: 'validate' };
+  if (/\b(validate|verify|test (the|that|this|my|your) (fix|change|patch)|check (the|that|your) fix|(does|did|will) (the|that|your) fix work|is (the|that|your) fix (right|correct|ok|good))\b/.test(text)) return { kind: 'validate' };
   if (/\b(apply|use|accept|keep) (the|that|this) (fix|patch|change)\b/.test(text)) return { kind: 'apply' };
   if (/\b(show me|point (to|at)|where('s| is) the (error|bug|problem|crash|mistake))\b/.test(text)) return { kind: 'show' };
-  if (/\b(fix|repair|solve|correct|patch)\b/.test(text)) return { kind: 'fix' };
+  if (/\b(fix|repair|solve|correct|patch|make it work|how (do|can|should) i (fix|correct|solve))\b/.test(text)) return { kind: 'fix' };
 
   const step = text.match(/\bstep (\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
   if (step) return { kind: 'state', step: (NUMBER_WORDS[step[1]] ?? Number(step[1])) - 1 };
@@ -64,8 +64,8 @@ export function parseIntent(utterance: string, variables: string[] = []): Intent
   }
 
   if (/\b(where (are we|is it|did it stop|is the program)|what line|which line|current line)\b/.test(text)) return { kind: 'state' };
-  if (/\b(why|what went wrong|wrong|crash|crashed|error|bug|broken|fail|failed|summar|debug|problem)\b/.test(text)) return { kind: 'summary' };
-  if (/\b(run|execute|start|try|explain|what does|what is my code|how does|go)\b/.test(text)) return { kind: 'run' };
+  if (/\b(why|what went wrong|wrong|crash|crashed|error|bug|broken|fail|failed|summar|debug|problem|what happened|not working|doesn'?t work|isn'?t working)\b/.test(text)) return { kind: 'summary' };
+  if (/\b(run|execute|start|try|explain|what does|what is my code|how does|go|test my code|check my code|does it work|what happens|play)\b/.test(text)) return { kind: 'run' };
   return { kind: 'unknown' };
 }
 

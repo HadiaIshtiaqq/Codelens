@@ -91,3 +91,12 @@ def test_endless_loop_is_flagged_before_running():
 def test_a_number_turned_into_text_is_not_flagged():
     src = 'total = 5\ntotal = str(total)\nprint("Total: " + total)\n'
     assert explain_program(src, "classic")["warnings"] == []
+
+
+def test_typos_and_off_by_one_are_flagged_before_running():
+    typo = explain_program("total = 0\nfor n in [1, 2]:\n    total += n\nprint(totl)\n", "game")["warnings"]
+    assert len(typo) == 1 and typo[0]["line"] == 4 and "Did you mean `total`?" in typo[0]["text"]
+    off = explain_program("xs = [1, 2]\nfor i in range(len(xs) + 1):\n    print(xs[i])\n", "kid")["warnings"]
+    assert len(off) == 1 and off[0]["line"] == 2 and "range(len(xs))" in off[0]["text"]
+    clean = "import math\n\ndef area(r):\n    return math.pi * r ** 2\n\ntry:\n    print(area(2))\nexcept ValueError as e:\n    print(e)\n"
+    assert explain_program(clean, "classic")["warnings"] == []
