@@ -42,18 +42,6 @@ Problems hit while building CodeLens AI + REA, with what we did about them. Entr
 - **Workaround:** a tiny ASGI wrapper rebuilds `streamable_http_app()` (and so a fresh session manager) at every startup (`_McpEndpoint` in `backend/app/main.py`); tests use the shared client fixture.
 - **Suggestion:** make the session manager restartable, or document a "mount into an existing app" helper that owns this.
 
-## Nebius Token Factory — **TODO: fill in during the real integration**
-
-The adapter is implemented and tested against a mocked OpenAI-compatible endpoint only.
-
-- **Model IDs are a moving target (2026-10-21):** public sources disagreed on the Nemotron model ID (`nvidia/nemotron-3-super-120b-a12b`, `nvidia/Nemotron-3.5-Super-VL`, …) and on the host (`api.tokenfactory.nebius.com` vs a region-specific `api.tokenfactory.us-central1.nebius.com`). Fix: when `NEBIUS_MODEL` is empty, CodeLens reads the live `/models` catalogue and picks a Nemotron text model itself.
-
-Things to record when the real key is used:
-
-- Was the default base URL (`https://api.tokenfactory.nebius.com/v1`) correct?
-- Exact model ID for the Nemotron model used (default guess: `nvidia/Llama-3_3-Nemotron-Super-49B-v1_5`).
-- Was `response_format: {"type": "json_object"}` honoured? Did the model wrap JSON in `<think>` blocks or code fences? (The parser tolerates both.)
-- Latency from `POST /api/v1/ai/selftest`, rate limits, error formats.
 
 ## Alexa+ — **TODO: fill in when connecting the real Alexa+ preview**
 

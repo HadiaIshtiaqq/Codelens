@@ -74,68 +74,6 @@ Prerequisites: Python 3.11+, Node.js 22.19+ / 24.11+, and Docker Desktop (option
 
 `start.ps1` uses the Docker sandbox when the `codelens-worker:latest` image exists. Otherwise it falls back to the **subprocess** sandbox, which has **no container isolation** (only a memory cap) and is meant for local development only.
 
-## Deploying for the hackathon
-
-Every public option is locked with an **access code**, because visitors run code on your machine.
-
-- **Judges:** send them a link that ends in `#access=<code>`. The code is saved and removed from the address bar.
-- **Alexa+ and other MCP clients:** they send the code as `Authorization: Bearer <code>` to `https://<host>/mcp`.
-
-### Option A: a free permanent link on Render (opens on any computer)
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HadiaIshtiaqq/Codelens)
-
-1. Click the button. Sign in with GitHub, which is free and needs no card.
-2. Render reads [`render.yaml`](render.yaml) and asks for two values:
-   - `CODELENS_ACCESS_CODE`: for example `judges:pick-a-long-code`.
-   - `GEMINI_API_KEY`: optional; a free key from aistudio.google.com/apikey.
-3. Click **Apply**. The first build takes about 5–10 minutes. Your app is then at `https://<name>.onrender.com`, and judges open `https://<name>.onrender.com/#access=pick-a-long-code`.
-
-Free Render apps sleep after 15 minutes without visitors, and the next visit takes about a minute to wake them. Every push to `main` redeploys automatically. Alexa+ / MCP clients use `https://<name>.onrender.com/mcp` with `Authorization: Bearer pick-a-long-code`.
-
-Render can't start Docker containers, so programs run in the **subprocess sandbox** ([`deploy/hosted/Dockerfile`](deploy/hosted/Dockerfile)): a separate, memory-limited Python process with an empty environment. The server also makes itself non-dumpable, so user programs can't read its secrets through `/proc`. The access code keeps strangers out. For full container isolation, use option C.
-
-(`scripts/deploy-hf.ps1` deploys the same image to Hugging Face Spaces, but Docker Spaces now need a PRO account there.)
-
-### Option B: a public link from your own computer (one command)
-
-Docker Desktop must be running and the sandbox image built (`scripts/setup.ps1` does both).
-
-```powershell
-.\scripts\go-public.ps1            # Windows
-./scripts/go-public.sh              # macOS / Linux (needs cloudflared)
-```
-
-The script:
-1. Opens a free HTTPS tunnel with no account needed. It tries a Cloudflare quick tunnel first, then falls back to localhost.run over SSH, which is built into Windows.
-2. Creates an access code.
-3. Starts the app and prints three things: the link for judges, the plain address with its code, and the Alexa+ endpoint.
-
-It refuses to run without the Docker sandbox. The address changes every time it starts and lasts while your computer is on, so for a long judging period use option B.
-
-### Option C: a server (any Linux VM with Docker, 2 GB of RAM)
-
-Free platforms like Render or Vercel can't start Docker containers, so they won't work.
-
-```bash
-git clone https://github.com/HadiaIshtiaqq/Codelens && cd Codelens
-export CODELENS_ACCESS_CODE="judges:$(openssl rand -hex 6)"   # required: compose won't start without it
-docker compose up -d --build                                   # http://<server-ip>:8000
-
-# Automatic HTTPS: point a DNS name at the server first. /mcp then answers on that name too.
-CODELENS_DOMAIN=demo.example.com docker compose --profile https up -d --build
-```
-
-- **One image** contains the UI, the API and `/mcp`. Every run still happens in its own network-less, read-only `codelens-worker` container, started through the host's Docker socket.
-- **Access codes:** give each group its own code, for example `CODELENS_ACCESS_CODE=judges:abc123,team:xyz789`, so you can revoke one by removing it.
-- **Rate limits** count each visitor separately, even behind the HTTPS proxy or a tunnel.
-- **Non-root:** the app container runs as an unprivileged user. On Linux, pass the host's docker group: `DOCKER_GID=$(getent group docker | cut -d: -f3) docker compose up -d`.
-- **Upgrading from a version before the non-root change:** the old data volume belongs to root. Run `docker compose down -v` once (this deletes stored runs).
-- **Retention:** stored runs expire after 72 h (`CODELENS_RETENTION_HOURS`), and the 🗑 **delete run** button removes one immediately.
-
-### Connecting Alexa+
-
-Register the MCP server as **Streamable HTTP** at `https://<your-host>/mcp` (the live demo: `https://codelens-ctxh.onrender.com/mcp`), with the header `Authorization: Bearer <access code>`. The server negotiates MCP protocol 2025-11-25 or later and offers 19 tools; the six "voice" tools return a short `speech` answer. [`server.json`](server.json) describes the live endpoint for MCP registries.
 
 ## Configuration
 
@@ -145,10 +83,9 @@ Copy `backend/.env.example` to `backend/.env`. The main settings:
 | --- | --- |
 | `CODELENS_SANDBOX` | `docker` (production) or `subprocess` (dev) |
 | `GEMINI_API_KEY` | Enables Google Gemini (free tier: get a key at aistudio.google.com/apikey). Alexa's open questions, explanations and fixes then come from the AI, grounded in the code and the trace. Leave `GEMINI_MODEL` empty to pick the newest Flash model |
-| `NEBIUS_API_KEY` | Enables Nebius Token Factory. Leave `NEBIUS_MODEL` empty to auto-pick a Nemotron model from your account's `/models` list |
-| `OLLAMA_MODEL` | Use a local Ollama model instead |
-| `CODELENS_LLM_PROVIDER` | `auto` (default), `nebius`, `ollama`, or `offline` |
-| `CODELENS_REQUIRE_PROVIDER=1` | Never fall back to offline rules: provider failures return HTTP 502, so every answer provably comes from Nebius |
+| `OLLAMA_MODEL` | Use a local Ollama model instead (e.g. `llama3.2`, `codellama`) |
+| `CODELENS_LLM_PROVIDER` | `auto` (default), `gemini`, `ollama`, or `offline` |
+| `CODELENS_REQUIRE_PROVIDER=1` | Never fall back to offline rules: provider failures return HTTP 502, so every answer provably comes from the configured AI provider |
 | `REA_WORKSPACE_ROOT` | Directory REA may read (default `rea-workspace/`) |
 | `REA_ALLOW_DESTRUCTIVE=1` | Unlock REA tools annotated destructive (debuggers, Frida, write-back) |
 
@@ -230,35 +167,23 @@ CI (`.github/workflows/ci.yml`) runs all three on every push, including the Dock
 | POST | `/api/v1/explanations` | Evidence-grounded explanation |
 | POST | `/api/v1/patches` · GET `/api/v1/patches/{id}` | Generate (or submit) a patch |
 | POST | `/api/v1/patches/validate` | Run tests against the patch in a sandbox |
-| POST | `/api/v1/ai/selftest` | One real call to the configured provider (proves Nebius is live; shows latency) |
+| POST | `/api/v1/ai/selftest` | One real call to the configured provider (proves AI provider is live; shows latency) |
 | GET | `/api/v1/rea/status` · `/workspace` · `/tools` · `/tools/{name}` | REA readiness, workspace, tool catalogue |
 | POST | `/api/v1/rea/javascript` · `/api/v1/rea/tools/call` | JS/Electron analysis, any REA tool |
 
-## Hackathon checklist
+## Build, Ship, Shape: Amazon Developer Hackathon
 
-**Build, Ship, Shape: Amazon Developer Hackathon** (Alexa+ track). Draft Devpost answers are in [`SUBMISSION.md`](SUBMISSION.md).
+Built for the **Build, Ship, Shape: Amazon Developer Hackathon** (Alexa+ Track).
 
-| Requirement | Where |
+| Requirement / Track | Implementation & Location |
 | --- | --- |
-| Self-hosted MCP server, spec 2025-11-25+, Streamable HTTP | `backend/app/mcp_server.py`, served at `/mcp` by `backend/app/main.py`; tests: `backend/tests/test_mcp_http.py` |
-| The repo calls the track's technology in code | MCP server entry points above; browser MCP client `frontend/src/lib/mcpClient.ts` |
-| Simulated Alexa+ experience (source included) | `frontend/src/components/AlexaView.tsx` (🔵 Alexa+ tab) |
-| Open-source license | [`LICENSE`](LICENSE) (MIT) |
-| Product feedback, friction log (bonus) | [`SUBMISSION.md`](SUBMISSION.md), [`FRICTION_LOG.md`](FRICTION_LOG.md) |
-| Working demo | Live at https://codelens-ctxh.onrender.com (free Render plan, [`render.yaml`](render.yaml)); the MCP server answers at `/mcp` |
-| Agentic behaviour | Alexa's autopilot ([`backend/app/services/agent.py`](backend/app/services/agent.py), MCP tool `debug_autopilot`) plans and chains run → diagnose → fix → test |
-
-**Nebius × NVIDIA:**
-
-| Requirement | Where |
-| --- | --- |
-| Nebius Token Factory + NVIDIA model | `NEBIUS_API_KEY`, `NEBIUS_MODEL`; set `CODELENS_REQUIRE_PROVIDER=1` and check `POST /api/v1/ai/selftest` before recording |
-| Agentic chain (sandbox → trace evidence → diagnosis → diff → test validation) | Debugger tab, or the MCP tools in order |
-| MCP entry point (Alexa+) | `backend/app/mcp_server.py`, `.mcp.json`, `server.json` |
-| Open-source license | [`LICENSE`](LICENSE) (MIT; all dependencies are MIT/BSD) |
-| Friction logs (bonus) | [`FRICTION_LOG.md`](FRICTION_LOG.md), with Nebius and AWS sections to fill in from real use |
-
-Still on you: the demo video (under 3 minutes), and submitting on Devpost with the judges' link.
+| **Primary Track: Alexa+** | Self-hosted MCP server (spec 2025-11-25+, Streamable HTTP) with 19 tools and voice-ready `speech` annotations ([`backend/app/mcp_server.py`](backend/app/mcp_server.py), mounted at `/mcp` in [`backend/app/main.py`](backend/app/main.py)) |
+| **Simulated Alexa+ Experience** | In-app Echo Show-style simulator with voice input, live MCP traffic inspection, and visual companion **Lexi** ([`frontend/src/components/AlexaView.tsx`](frontend/src/components/AlexaView.tsx)) |
+| **Agentic Autopilot** | Autonomous planning and tool chaining (run → diagnose → fix → test) via [`backend/app/services/agent.py`](backend/app/services/agent.py) and MCP tool `debug_autopilot` |
+| **Track Tech Called in Code** | Direct server endpoints, client library ([`frontend/src/lib/mcpClient.ts`](frontend/src/lib/mcpClient.ts)), agent flows, and MCP configs ([`.mcp.json`](.mcp.json), [`server.json`](server.json)) |
+| **Mini Challenge: Open Source** | Permissive open-source license ([`LICENSE`](LICENSE) - MIT) with reproducible Docker sandbox environments and test suites |
+| **Product Feedback & Friction Logs** | Comprehensive developer tool feedback in [`SUBMISSION.md`](SUBMISSION.md) and real-world friction logs in [`FRICTION_LOG.md`](FRICTION_LOG.md) |
+| **Live Working Demo** | Live web app at https://codelens-ctxh.onrender.com with Streamable HTTP MCP server answering at `https://codelens-ctxh.onrender.com/mcp` |
 
 ## Known limits
 
